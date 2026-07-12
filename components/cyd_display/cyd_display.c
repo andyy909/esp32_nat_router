@@ -2,7 +2,7 @@
 
 #include "cyd_display.h"
 
-#if CONFIG_CYD_DISPLAY
+#if CONFIG_CYD_DISPLAY || CONFIG_WAVESHARE_C6_LCD_1_47
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -10,14 +10,17 @@
 #include <string.h>
 
 #include "driver/gpio.h"
+#include "driver/ledc.h"
 #include "driver/spi_master.h"
 #include "esp_check.h"
 #include "esp_heap_caps.h"
 #include "esp_lcd_panel_io.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_vendor.h"
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
 #include "esp_lcd_touch.h"
 #include "esp_lcd_touch_xpt2046.h"
+#endif
 #include "esp_log.h"
 #include "esp_netif_ip_addr.h"
 #include "esp_system.h"
@@ -32,17 +35,35 @@
 #include "wifi_config.h"
 
 #define LCD_HOST            SPI2_HOST
+#define LCD_DRAW_LINES      20
+
+#if CONFIG_WAVESHARE_C6_LCD_1_47
+/* Waveshare ESP32-C6-LCD-1.47: portrait ST7789, no touch controller. */
+#define LCD_HRES            172
+#define LCD_VRES            320
+#define PIN_LCD_MOSI        6
+#define PIN_LCD_MISO        5
+#define PIN_LCD_CLK         7
+#define PIN_LCD_CS          14
+#define PIN_LCD_DC          15
+#define PIN_LCD_RESET       21
+#define PIN_LCD_BACKLIGHT   22
+#define PIN_BOOT_BUTTON     9
+#define LCD_X_GAP           34
+#define LCD_Y_GAP           0
+#else
 #define TOUCH_HOST          SPI3_HOST
 #define LCD_HRES            320
 #define LCD_VRES            240
-#define LCD_DRAW_LINES      20
-
 #define PIN_LCD_MOSI        13
 #define PIN_LCD_MISO        12
 #define PIN_LCD_CLK         14
 #define PIN_LCD_CS          15
 #define PIN_LCD_DC          2
+#define PIN_LCD_RESET       -1
 #define PIN_LCD_BACKLIGHT   21
+#define LCD_X_GAP           0
+#define LCD_Y_GAP           0
 
 #define PIN_TOUCH_MOSI      32
 #define PIN_TOUCH_MISO      39
@@ -54,6 +75,7 @@
 #define TOUCH_X_MAX         3900
 #define TOUCH_Y_MIN         240
 #define TOUCH_Y_MAX         3900
+#endif
 #define WIFI_SCAN_MAX       6
 #define WIFI_SCAN_FETCH_MAX 20
 
@@ -70,11 +92,15 @@ extern char *ap_ssid;
 
 static const char *TAG = "cyd";
 static esp_lcd_panel_handle_t s_panel;
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
 static esp_lcd_touch_handle_t s_touch;
+#endif
 static lv_disp_drv_t s_disp_drv;
 static lv_disp_draw_buf_t s_draw_buf;
 static lv_obj_t *s_status_page;
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
 static lv_obj_t *s_access_page;
+#endif
 static lv_obj_t *s_wifi_page;
 static lv_obj_t *s_devices_page;
 static lv_obj_t *s_uplink_value;
@@ -83,31 +109,42 @@ static lv_obj_t *s_client_value;
 static lv_obj_t *s_rate_value;
 static lv_obj_t *s_ap_value;
 static lv_obj_t *s_status_dot;
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
 static lv_obj_t *s_switch_internet;
 static lv_obj_t *s_switch_clients;
 static lv_obj_t *s_switch_private;
 static lv_obj_t *s_wifi_scan_panel;
 static lv_obj_t *s_wifi_password_panel;
-static lv_obj_t *s_wifi_scan_status;
-static lv_obj_t *s_wifi_result_list;
 static lv_obj_t *s_wifi_selected_label;
 static lv_obj_t *s_wifi_password;
 static lv_obj_t *s_wifi_keyboard;
 static lv_obj_t *s_wifi_nav_buttons[4];
+#endif
+static lv_obj_t *s_wifi_scan_status;
+static lv_obj_t *s_wifi_result_list;
 static lv_obj_t *s_devices_summary;
 static lv_obj_t *s_devices_list;
 static cyd_wifi_entry_t s_wifi_entries[WIFI_SCAN_MAX];
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
 static char s_selected_ssid[33];
 static wifi_auth_mode_t s_selected_authmode;
+#endif
 static volatile bool s_scan_requested;
 static volatile bool s_scan_ready;
 static volatile bool s_scan_failed;
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
+static bool s_scan_navigation_locked;
+#endif
 static uint8_t s_wifi_entry_count;
 static uint8_t s_current_page;
 static uint64_t s_prev_tx;
 static uint64_t s_prev_rx;
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
 static int64_t s_last_touch_log_us;
+static int64_t s_scan_navigation_unlock_us;
+#endif
 
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
 static int clamp_map(int value, int in_min, int in_max, int out_min, int out_max)
 {
     if (value < in_min) value = in_min;
@@ -133,6 +170,7 @@ static void touch_process(esp_lcd_touch_handle_t tp, uint16_t *x, uint16_t *y,
         s_last_touch_log_us = now;
     }
 }
+#endif
 
 static bool lcd_flush_done(esp_lcd_panel_io_handle_t io,
                            esp_lcd_panel_io_event_data_t *event_data, void *user_ctx)
@@ -155,6 +193,7 @@ static void lvgl_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *co
     }
 }
 
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
 static void lvgl_touch_read(lv_indev_drv_t *drv, lv_indev_data_t *data)
 {
     (void)drv;
@@ -170,6 +209,7 @@ static void lvgl_touch_read(lv_indev_drv_t *drv, lv_indev_data_t *data)
         data->state = LV_INDEV_STATE_REL;
     }
 }
+#endif
 
 static void lvgl_tick(void *arg)
 {
@@ -203,6 +243,7 @@ static lv_obj_t *make_card(lv_obj_t *parent, lv_coord_t x, lv_coord_t y,
     return card;
 }
 
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
 static void show_page(uint8_t page)
 {
     s_current_page = page;
@@ -218,7 +259,13 @@ static void show_page(uint8_t page)
 
 static void nav_event(lv_event_t *event)
 {
-    show_page((uint8_t)(intptr_t)lv_event_get_user_data(event));
+    uint8_t page = (uint8_t)(intptr_t)lv_event_get_user_data(event);
+    if (page != 2 && (s_scan_navigation_locked ||
+                      esp_timer_get_time() < s_scan_navigation_unlock_us)) {
+        ESP_LOGD(TAG, "Ignoring navigation while WLAN scan UI is settling");
+        return;
+    }
+    show_page(page);
 }
 
 static void add_nav(lv_obj_t *page, uint8_t active_page)
@@ -245,6 +292,7 @@ static void add_nav(lv_obj_t *page, uint8_t active_page)
         lv_obj_center(label);
     }
 }
+#endif
 
 static void format_rate(uint64_t bytes, char *buf, size_t len)
 {
@@ -257,6 +305,7 @@ static void format_rate(uint64_t bytes, char *buf, size_t len)
     }
 }
 
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
 static void devices_update(lv_timer_t *timer)
 {
     (void)timer;
@@ -279,8 +328,8 @@ static void devices_update(lv_timer_t *timer)
 
     for (int i = 0; i < count; i++) {
         lv_obj_t *row = lv_obj_create(s_devices_list);
-        lv_obj_set_pos(row, 0, i * 40);
-        lv_obj_set_size(row, 296, 37);
+        lv_obj_set_pos(row, 0, i * 46);
+        lv_obj_set_size(row, 296, 43);
         lv_obj_set_style_radius(row, 5, 0);
         lv_obj_set_style_bg_color(row, lv_color_hex(0x16202A), 0);
         lv_obj_set_style_border_color(row, lv_color_hex(0x273746), 0);
@@ -289,7 +338,7 @@ static void devices_update(lv_timer_t *timer)
         lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
         const char *name = clients[i].name[0] ? clients[i].name : "Unbekanntes Geraet";
-        lv_obj_t *name_label = make_label(row, name, 7, 2, LV_FONT_DEFAULT,
+        lv_obj_t *name_label = make_label(row, name, 7, 1, LV_FONT_DEFAULT,
                                           lv_color_hex(0xEAF4F8));
         lv_label_set_long_mode(name_label, LV_LABEL_LONG_DOT);
         lv_obj_set_width(name_label, 132);
@@ -303,9 +352,10 @@ static void devices_update(lv_timer_t *timer)
         snprintf(text, sizeof(text), "%02X:%02X:%02X:%02X:%02X:%02X",
                  clients[i].mac[0], clients[i].mac[1], clients[i].mac[2],
                  clients[i].mac[3], clients[i].mac[4], clients[i].mac[5]);
-        make_label(row, text, 7, 19, LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
+        make_label(row, text, 7, 23, LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
     }
 }
+#endif
 
 static void status_update(lv_timer_t *timer)
 {
@@ -345,6 +395,7 @@ static void status_update(lv_timer_t *timer)
     lv_label_set_text(s_rate_value, text);
 }
 
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
 static void save_access(void)
 {
     access_internet_enabled = lv_obj_has_state(s_switch_internet, LV_STATE_CHECKED);
@@ -406,7 +457,9 @@ static void preset_button(lv_obj_t *parent, const char *text, lv_coord_t x,
     lv_obj_set_style_text_font(label, LV_FONT_DEFAULT, 0);
     lv_obj_center(label);
 }
+#endif
 
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
 static void wifi_restart_timer(lv_timer_t *timer)
 {
     (void)timer;
@@ -495,34 +548,33 @@ static void wifi_render_results(void)
     lv_obj_clean(s_wifi_result_list);
     if (s_scan_failed) {
         lv_label_set_text(s_wifi_scan_status, "Scan fehlgeschlagen - erneut versuchen");
-        return;
-    }
-    if (s_wifi_entry_count == 0) {
+    } else if (s_wifi_entry_count == 0) {
         lv_label_set_text(s_wifi_scan_status, "Keine WLAN-Netze gefunden");
-        return;
+    } else {
+        char status[48];
+        snprintf(status, sizeof(status), "%u Netze gefunden", (unsigned)s_wifi_entry_count);
+        lv_label_set_text(s_wifi_scan_status, status);
+        for (uint8_t i = 0; i < s_wifi_entry_count; i++) {
+            lv_obj_t *button = lv_btn_create(s_wifi_result_list);
+            lv_obj_set_pos(button, 0, i * 24);
+            lv_obj_set_size(button, 296, 22);
+            lv_obj_set_style_radius(button, 4, 0);
+            lv_obj_set_style_bg_color(button, lv_color_hex(0x1C2935), 0);
+            lv_obj_set_style_pad_hor(button, 7, 0);
+            lv_obj_add_event_cb(button, wifi_network_event, LV_EVENT_CLICKED,
+                                (void *)(intptr_t)i);
+            char row[64];
+            snprintf(row, sizeof(row), "%-24.24s %4d dBm %s",
+                     s_wifi_entries[i].ssid, s_wifi_entries[i].rssi,
+                     s_wifi_entries[i].authmode == WIFI_AUTH_OPEN ? "OFFEN" : "");
+            lv_obj_t *label = lv_label_create(button);
+            lv_label_set_text(label, row);
+            lv_obj_set_style_text_font(label, LV_FONT_DEFAULT, 0);
+            lv_obj_align(label, LV_ALIGN_LEFT_MID, 0, 0);
+        }
     }
-
-    char status[48];
-    snprintf(status, sizeof(status), "%u Netze gefunden", (unsigned)s_wifi_entry_count);
-    lv_label_set_text(s_wifi_scan_status, status);
-    for (uint8_t i = 0; i < s_wifi_entry_count; i++) {
-        lv_obj_t *button = lv_btn_create(s_wifi_result_list);
-        lv_obj_set_pos(button, 0, i * 24);
-        lv_obj_set_size(button, 296, 22);
-        lv_obj_set_style_radius(button, 4, 0);
-        lv_obj_set_style_bg_color(button, lv_color_hex(0x1C2935), 0);
-        lv_obj_set_style_pad_hor(button, 7, 0);
-        lv_obj_add_event_cb(button, wifi_network_event, LV_EVENT_CLICKED,
-                            (void *)(intptr_t)i);
-        char row[64];
-        snprintf(row, sizeof(row), "%-24.24s %4d dBm %s",
-                 s_wifi_entries[i].ssid, s_wifi_entries[i].rssi,
-                 s_wifi_entries[i].authmode == WIFI_AUTH_OPEN ? "OFFEN" : "");
-        lv_obj_t *label = lv_label_create(button);
-        lv_label_set_text(label, row);
-        lv_obj_set_style_text_font(label, LV_FONT_DEFAULT, 0);
-        lv_obj_align(label, LV_ALIGN_LEFT_MID, 0, 0);
-    }
+    s_scan_navigation_locked = false;
+    s_scan_navigation_unlock_us = esp_timer_get_time() + 500000;
 }
 
 static void wifi_scan_ui_timer(lv_timer_t *timer)
@@ -539,10 +591,12 @@ static void wifi_scan_event(lv_event_t *event)
     if (s_scan_requested) return;
     s_scan_failed = false;
     s_scan_ready = false;
+    s_scan_navigation_locked = true;
     s_scan_requested = true;
     show_page(2);
     lv_label_set_text(s_wifi_scan_status, "Scanne...");
 }
+#endif
 
 static void wifi_scan_task(void *arg)
 {
@@ -551,6 +605,13 @@ static void wifi_scan_task(void *arg)
         if (!s_scan_requested) {
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
+        }
+
+        bool reconnect_after_scan = !ap_connect;
+        if (reconnect_after_scan) {
+            wifi_scan_active = true;
+            esp_wifi_disconnect();
+            vTaskDelay(pdMS_TO_TICKS(100));
         }
 
         wifi_scan_config_t config = {
@@ -592,13 +653,260 @@ static void wifi_scan_task(void *arg)
             }
         }
         s_scan_failed = err != ESP_OK;
+        wifi_scan_active = false;
+        if (reconnect_after_scan && !ap_connect) {
+            esp_wifi_connect();
+        }
         s_scan_requested = false;
         s_scan_ready = true;
-        ESP_LOGI(TAG, "Touch WLAN scan: %u results (%s)",
+        ESP_LOGI(TAG, "WLAN scan: %u results (%s)",
                  (unsigned)s_wifi_entry_count, esp_err_to_name(err));
     }
 }
 
+#if CONFIG_WAVESHARE_C6_LCD_1_47
+static void c6_show_page(uint8_t page)
+{
+    s_current_page = page % 3;
+    lv_obj_add_flag(s_status_page, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_devices_page, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_wifi_page, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_t *selected = s_current_page == 0 ? s_status_page :
+                         s_current_page == 1 ? s_devices_page : s_wifi_page;
+    lv_obj_clear_flag(selected, LV_OBJ_FLAG_HIDDEN);
+    if (s_current_page == 2 && !s_scan_requested) {
+        s_scan_ready = false;
+        s_scan_failed = false;
+        s_scan_requested = true;
+        lv_label_set_text(s_wifi_scan_status, "Suche WLAN-Netze ...");
+    }
+}
+
+static void c6_button_update(lv_timer_t *timer)
+{
+    (void)timer;
+    static bool raw_released = true;
+    static bool stable_released = true;
+    static int64_t changed_at;
+    bool released = gpio_get_level(PIN_BOOT_BUTTON) != 0;
+    int64_t now = esp_timer_get_time();
+
+    if (released != raw_released) {
+        raw_released = released;
+        changed_at = now;
+    }
+    if (released != stable_released && now - changed_at >= 50000) {
+        stable_released = released;
+        if (!stable_released) {
+            c6_show_page((uint8_t)(s_current_page + 1));
+        }
+    }
+}
+
+static void c6_devices_update(lv_timer_t *timer)
+{
+    (void)timer;
+    if (s_current_page != 1) return;
+
+    connected_client_t clients[AP_MAX_CONNECTIONS];
+    int count = get_connected_clients(clients, AP_MAX_CONNECTIONS);
+    char text[48];
+    snprintf(text, sizeof(text), "%d verbunden", count);
+    lv_label_set_text(s_devices_summary, text);
+    lv_obj_clean(s_devices_list);
+
+    if (count == 0) {
+        lv_obj_t *empty = make_label(s_devices_list, "Keine Clients", 0, 72,
+                                     &lv_font_montserrat_16, lv_color_hex(0x8295A5));
+        lv_obj_set_width(empty, 140);
+        lv_obj_set_style_text_align(empty, LV_TEXT_ALIGN_CENTER, 0);
+        return;
+    }
+
+    for (int i = 0; i < count; i++) {
+        lv_obj_t *row = lv_obj_create(s_devices_list);
+        lv_obj_set_pos(row, 0, i * 48);
+        lv_obj_set_size(row, 140, 44);
+        lv_obj_set_style_radius(row, 5, 0);
+        lv_obj_set_style_bg_color(row, lv_color_hex(0x16202A), 0);
+        lv_obj_set_style_border_color(row, lv_color_hex(0x273746), 0);
+        lv_obj_set_style_border_width(row, 1, 0);
+        lv_obj_set_style_pad_all(row, 0, 0);
+        lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+
+        const char *name = clients[i].name[0] ? clients[i].name : "Unbekannt";
+        lv_obj_t *name_label = make_label(row, name, 6, 3, LV_FONT_DEFAULT,
+                                          lv_color_hex(0xEAF4F8));
+        lv_label_set_long_mode(name_label, LV_LABEL_LONG_DOT);
+        lv_obj_set_width(name_label, 128);
+
+        char ip[16] = "keine IP";
+        if (clients[i].has_ip) {
+            esp_ip4_addr_t addr = { .addr = clients[i].ip };
+            snprintf(ip, sizeof(ip), IPSTR, IP2STR(&addr));
+        }
+        make_label(row, ip, 6, 23, LV_FONT_DEFAULT, lv_color_hex(0x52D8E8));
+    }
+}
+
+static void c6_scan_update(lv_timer_t *timer)
+{
+    (void)timer;
+    if (s_current_page != 2) return;
+
+    if (s_scan_failed) {
+        s_scan_failed = false;
+        lv_label_set_text(s_wifi_scan_status, "Scan fehlgeschlagen");
+        return;
+    }
+    if (!s_scan_ready) return;
+    s_scan_ready = false;
+
+    char text[48];
+    snprintf(text, sizeof(text), "%u Netze gefunden", (unsigned)s_wifi_entry_count);
+    lv_label_set_text(s_wifi_scan_status, text);
+    lv_obj_clean(s_wifi_result_list);
+
+    if (s_wifi_entry_count == 0) {
+        make_label(s_wifi_result_list, "Keine Netze", 0, 72,
+                   &lv_font_montserrat_16, lv_color_hex(0x8295A5));
+        return;
+    }
+
+    for (uint8_t i = 0; i < s_wifi_entry_count; i++) {
+        lv_obj_t *row = lv_obj_create(s_wifi_result_list);
+        lv_obj_set_pos(row, 0, i * 38);
+        lv_obj_set_size(row, 140, 35);
+        lv_obj_set_style_radius(row, 5, 0);
+        lv_obj_set_style_bg_color(row, lv_color_hex(0x16202A), 0);
+        lv_obj_set_style_border_width(row, 0, 0);
+        lv_obj_set_style_pad_all(row, 0, 0);
+        lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+
+        lv_obj_t *ssid_label = make_label(row, s_wifi_entries[i].ssid, 6, 2,
+                                          LV_FONT_DEFAULT, lv_color_hex(0xEAF4F8));
+        lv_label_set_long_mode(ssid_label, LV_LABEL_LONG_DOT);
+        lv_obj_set_width(ssid_label, 96);
+        snprintf(text, sizeof(text), "%d", s_wifi_entries[i].rssi);
+        make_label(row, text, 108, 2, LV_FONT_DEFAULT, lv_color_hex(0x52D8E8));
+        make_label(row, s_wifi_entries[i].authmode == WIFI_AUTH_OPEN ? "offen" : "geschuetzt",
+                   6, 18, LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
+    }
+}
+
+static void create_ui(void)
+{
+    lv_obj_t *screen = lv_scr_act();
+    lv_obj_set_style_bg_color(screen, lv_color_hex(0x0B1117), 0);
+    lv_obj_set_style_text_color(screen, lv_color_hex(0xEAF4F8), 0);
+    lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
+
+    s_status_page = lv_obj_create(screen);
+    lv_obj_set_size(s_status_page, LCD_HRES, LCD_VRES);
+    lv_obj_set_style_bg_opa(s_status_page, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_status_page, 0, 0);
+    lv_obj_set_style_pad_all(s_status_page, 0, 0);
+    lv_obj_clear_flag(s_status_page, LV_OBJ_FLAG_SCROLLABLE);
+
+    s_status_dot = lv_obj_create(s_status_page);
+    lv_obj_set_pos(s_status_dot, 9, 12);
+    lv_obj_set_size(s_status_dot, 10, 10);
+    lv_obj_set_style_radius(s_status_dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(s_status_dot, 0, 0);
+    make_label(s_status_page, "ROUTER", 27, 7, &lv_font_montserrat_20,
+               lv_color_hex(0x52D8E8));
+
+    lv_obj_t *uplink = make_card(s_status_page, 8, 38, 156, 72);
+    make_label(uplink, "INTERNET", 0, 0, LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
+    s_uplink_value = make_label(uplink, "OFFLINE", 0, 18, &lv_font_montserrat_20,
+                                lv_color_hex(0xFF6B6B));
+    s_uplink_detail = make_label(uplink, "Kein Bezugsnetz", 0, 43, LV_FONT_DEFAULT,
+                                 lv_color_hex(0xAFC0CC));
+    lv_label_set_long_mode(s_uplink_detail, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(s_uplink_detail, 140);
+
+    lv_obj_t *clients = make_card(s_status_page, 8, 118, 72, 80);
+    make_label(clients, "CLIENTS", 0, 0, LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
+    s_client_value = make_label(clients, "0", 0, 22, &lv_font_montserrat_20,
+                                lv_color_hex(0xEAF4F8));
+
+    lv_obj_t *traffic = make_card(s_status_page, 88, 118, 76, 80);
+    make_label(traffic, "TRAFFIC", 0, 0, LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
+    s_rate_value = make_label(traffic, "D 0 B/s\nU 0 B/s", 0, 23, LV_FONT_DEFAULT,
+                              lv_color_hex(0xEAF4F8));
+
+    lv_obj_t *access = make_card(s_status_page, 8, 206, 156, 64);
+    make_label(access, "ACCESS POINT", 0, 0, LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
+    s_ap_value = make_label(access, "ESP32_NAT_Router", 0, 21,
+                            &lv_font_montserrat_16, lv_color_hex(0xEAF4F8));
+    lv_label_set_long_mode(s_ap_value, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(s_ap_value, 140);
+
+    make_label(s_status_page, "WebUI: 192.168.4.1", 10, 284, LV_FONT_DEFAULT,
+               lv_color_hex(0x8295A5));
+    make_label(s_status_page, "BOOT: naechste Seite", 10, 302, LV_FONT_DEFAULT,
+               lv_color_hex(0x526473));
+
+    s_devices_page = lv_obj_create(screen);
+    lv_obj_set_size(s_devices_page, LCD_HRES, LCD_VRES);
+    lv_obj_set_style_bg_opa(s_devices_page, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_devices_page, 0, 0);
+    lv_obj_set_style_pad_all(s_devices_page, 0, 0);
+    lv_obj_clear_flag(s_devices_page, LV_OBJ_FLAG_SCROLLABLE);
+    make_label(s_devices_page, "GERAETE", 10, 7, &lv_font_montserrat_20,
+               lv_color_hex(0x52D8E8));
+    s_devices_summary = make_label(s_devices_page, "0 verbunden", 10, 31,
+                                   LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
+    s_devices_list = lv_obj_create(s_devices_page);
+    lv_obj_set_pos(s_devices_list, 8, 52);
+    lv_obj_set_size(s_devices_list, 156, 228);
+    lv_obj_set_style_bg_opa(s_devices_list, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_devices_list, 0, 0);
+    lv_obj_set_style_pad_all(s_devices_list, 0, 0);
+    lv_obj_set_scroll_dir(s_devices_list, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(s_devices_list, LV_SCROLLBAR_MODE_AUTO);
+    make_label(s_devices_page, "BOOT: naechste Seite", 10, 298, LV_FONT_DEFAULT,
+               lv_color_hex(0x526473));
+
+    s_wifi_page = lv_obj_create(screen);
+    lv_obj_set_size(s_wifi_page, LCD_HRES, LCD_VRES);
+    lv_obj_set_style_bg_opa(s_wifi_page, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_wifi_page, 0, 0);
+    lv_obj_set_style_pad_all(s_wifi_page, 0, 0);
+    lv_obj_clear_flag(s_wifi_page, LV_OBJ_FLAG_SCROLLABLE);
+    make_label(s_wifi_page, "WLAN SCAN", 10, 7, &lv_font_montserrat_20,
+               lv_color_hex(0x52D8E8));
+    s_wifi_scan_status = make_label(s_wifi_page, "Scan startet ...", 10, 31,
+                                    LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
+    s_wifi_result_list = lv_obj_create(s_wifi_page);
+    lv_obj_set_pos(s_wifi_result_list, 8, 52);
+    lv_obj_set_size(s_wifi_result_list, 156, 228);
+    lv_obj_set_style_bg_opa(s_wifi_result_list, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_wifi_result_list, 0, 0);
+    lv_obj_set_style_pad_all(s_wifi_result_list, 0, 0);
+    lv_obj_set_scroll_dir(s_wifi_result_list, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(s_wifi_result_list, LV_SCROLLBAR_MODE_AUTO);
+    make_label(s_wifi_page, "BOOT: naechste Seite", 10, 298, LV_FONT_DEFAULT,
+               lv_color_hex(0x526473));
+
+    gpio_config_t button = {
+        .pin_bit_mask = 1ULL << PIN_BOOT_BUTTON,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    ESP_ERROR_CHECK(gpio_config(&button));
+
+    c6_show_page(0);
+    lv_timer_create(status_update, 1000, NULL);
+    lv_timer_create(c6_devices_update, 2000, NULL);
+    lv_timer_create(c6_scan_update, 250, NULL);
+    lv_timer_create(c6_button_update, 30, NULL);
+    status_update(NULL);
+}
+#else
 static void create_ui(void)
 {
     lv_obj_t *screen = lv_scr_act();
@@ -758,15 +1066,37 @@ static void create_ui(void)
     lv_timer_create(devices_update, 2000, NULL);
     status_update(NULL);
 }
+#endif
 
 static esp_err_t init_lcd(void)
 {
+#if CONFIG_WAVESHARE_C6_LCD_1_47
+    ledc_timer_config_t backlight_timer = {
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .duty_resolution = LEDC_TIMER_8_BIT,
+        .timer_num = LEDC_TIMER_0,
+        .freq_hz = 5000,
+        .clk_cfg = LEDC_AUTO_CLK,
+    };
+    ESP_RETURN_ON_ERROR(ledc_timer_config(&backlight_timer), TAG, "backlight timer");
+    ledc_channel_config_t backlight = {
+        .gpio_num = PIN_LCD_BACKLIGHT,
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .channel = LEDC_CHANNEL_0,
+        .intr_type = LEDC_INTR_DISABLE,
+        .timer_sel = LEDC_TIMER_0,
+        .duty = 0,
+        .hpoint = 0,
+    };
+    ESP_RETURN_ON_ERROR(ledc_channel_config(&backlight), TAG, "backlight channel");
+#else
     gpio_config_t backlight = {
         .pin_bit_mask = 1ULL << PIN_LCD_BACKLIGHT,
         .mode = GPIO_MODE_OUTPUT,
     };
     ESP_RETURN_ON_ERROR(gpio_config(&backlight), TAG, "backlight GPIO");
     gpio_set_level(PIN_LCD_BACKLIGHT, 0);
+#endif
 
     spi_bus_config_t bus = {
         .sclk_io_num = PIN_LCD_CLK,
@@ -782,8 +1112,18 @@ static esp_err_t init_lcd(void)
     esp_lcd_panel_io_spi_config_t io_config = {
         .cs_gpio_num = PIN_LCD_CS,
         .dc_gpio_num = PIN_LCD_DC,
-        .spi_mode = 3,
-        .pclk_hz = 20 * 1000 * 1000,
+        .spi_mode =
+#if CONFIG_WAVESHARE_C6_LCD_1_47
+            0,
+#else
+            3,
+#endif
+        .pclk_hz =
+#if CONFIG_WAVESHARE_C6_LCD_1_47
+            40 * 1000 * 1000,
+#else
+            20 * 1000 * 1000,
+#endif
         .trans_queue_depth = 10,
         .on_color_trans_done = lcd_flush_done,
         .user_ctx = NULL,
@@ -793,8 +1133,13 @@ static esp_err_t init_lcd(void)
     ESP_RETURN_ON_ERROR(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)LCD_HOST,
                                                  &io_config, &io), TAG, "LCD panel IO");
     esp_lcd_panel_dev_config_t panel_config = {
-        .reset_gpio_num = -1,
-        .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_BGR,
+        .reset_gpio_num = PIN_LCD_RESET,
+        .rgb_ele_order =
+#if CONFIG_WAVESHARE_C6_LCD_1_47
+            LCD_RGB_ELEMENT_ORDER_RGB,
+#else
+            LCD_RGB_ELEMENT_ORDER_BGR,
+#endif
         .bits_per_pixel = 16,
     };
     ESP_RETURN_ON_ERROR(esp_lcd_new_panel_st7789(io, &panel_config, &s_panel), TAG, "ST7789");
@@ -804,14 +1149,29 @@ static esp_err_t init_lcd(void)
     esp_err_t id_err = esp_lcd_panel_io_rx_param(io, 0x04, lcd_id, sizeof(lcd_id));
     ESP_LOGI(TAG, "LCD ID read: %s %02X %02X %02X", esp_err_to_name(id_err),
              lcd_id[0], lcd_id[1], lcd_id[2]);
+    ESP_RETURN_ON_ERROR(esp_lcd_panel_set_gap(s_panel, LCD_X_GAP, LCD_Y_GAP), TAG, "LCD gap");
+#if CONFIG_WAVESHARE_C6_LCD_1_47
+    ESP_RETURN_ON_ERROR(esp_lcd_panel_invert_color(s_panel, true), TAG, "LCD invert");
+    ESP_RETURN_ON_ERROR(esp_lcd_panel_swap_xy(s_panel, false), TAG, "LCD rotate");
+    ESP_RETURN_ON_ERROR(esp_lcd_panel_mirror(s_panel, false, false), TAG, "LCD mirror");
+#else
     ESP_RETURN_ON_ERROR(esp_lcd_panel_invert_color(s_panel, false), TAG, "LCD invert");
     ESP_RETURN_ON_ERROR(esp_lcd_panel_swap_xy(s_panel, true), TAG, "LCD rotate");
     ESP_RETURN_ON_ERROR(esp_lcd_panel_mirror(s_panel, true, false), TAG, "LCD mirror");
+#endif
     ESP_RETURN_ON_ERROR(esp_lcd_panel_disp_on_off(s_panel, true), TAG, "LCD on");
+#if CONFIG_WAVESHARE_C6_LCD_1_47
+    ESP_RETURN_ON_ERROR(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 128),
+                        TAG, "backlight duty");
+    ESP_RETURN_ON_ERROR(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0),
+                        TAG, "backlight update");
+#else
     gpio_set_level(PIN_LCD_BACKLIGHT, 1);
+#endif
     return ESP_OK;
 }
 
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
 static esp_err_t init_touch(void)
 {
     spi_bus_config_t bus = {
@@ -840,11 +1200,16 @@ static esp_err_t init_touch(void)
     };
     return esp_lcd_touch_new_spi_xpt2046(io, &touch_config, &s_touch);
 }
+#endif
 
 static void cyd_task(void *arg)
 {
     (void)arg;
-    if (init_lcd() != ESP_OK || init_touch() != ESP_OK) {
+    if (init_lcd() != ESP_OK
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
+        || init_touch() != ESP_OK
+#endif
+    ) {
         ESP_LOGE(TAG, "CYD hardware initialization failed");
         vTaskDelete(NULL);
         return;
@@ -868,11 +1233,13 @@ static void cyd_task(void *arg)
     s_disp_drv.draw_buf = &s_draw_buf;
     lv_disp_drv_register(&s_disp_drv);
 
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
     static lv_indev_drv_t input_drv;
     lv_indev_drv_init(&input_drv);
     input_drv.type = LV_INDEV_TYPE_POINTER;
     input_drv.read_cb = lvgl_touch_read;
     lv_indev_drv_register(&input_drv);
+#endif
 
     const esp_timer_create_args_t tick_args = {
         .callback = lvgl_tick,
@@ -883,7 +1250,11 @@ static void cyd_task(void *arg)
     ESP_ERROR_CHECK(esp_timer_start_periodic(tick_timer, 2000));
 
     create_ui();
+#if CONFIG_WAVESHARE_C6_LCD_1_47
+    ESP_LOGI(TAG, "Waveshare ESP32-C6-LCD-1.47 dashboard ready");
+#else
     ESP_LOGI(TAG, "CYD2USB dashboard ready (ST7789 mode 3 + XPT2046)");
+#endif
     while (true) {
         uint32_t delay_ms = lv_timer_handler();
         if (delay_ms < 5) delay_ms = 5;
@@ -894,15 +1265,23 @@ static void cyd_task(void *arg)
 
 void cyd_display_init(void)
 {
+#if CONFIG_WAVESHARE_C6_LCD_1_47
+    BaseType_t result = xTaskCreate(cyd_task, "c6_lcd_ui", 6144, NULL, 3, NULL);
+#else
     BaseType_t result = xTaskCreatePinnedToCore(cyd_task, "cyd_ui", 7168, NULL, 3, NULL, 1);
+#endif
     if (result != pdPASS) {
         ESP_LOGE(TAG, "Failed to create CYD display task");
         return;
     }
+#if CONFIG_WAVESHARE_C6_LCD_1_47
+    result = xTaskCreate(wifi_scan_task, "c6_scan", 4096, NULL, 2, NULL);
+#else
     result = xTaskCreatePinnedToCore(wifi_scan_task, "cyd_scan", 4096, NULL, 2, NULL, 0);
+#endif
     if (result != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create CYD WLAN scan task");
+        ESP_LOGE(TAG, "Failed to create WLAN scan task");
     }
 }
 
-#endif /* CONFIG_CYD_DISPLAY */
+#endif /* CONFIG_CYD_DISPLAY || CONFIG_WAVESHARE_C6_LCD_1_47 */

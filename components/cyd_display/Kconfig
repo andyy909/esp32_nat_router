@@ -1,0 +1,13 @@
+menu "Display support"
+
+config WAVESHARE_C6_LCD_1_47
+    bool "Waveshare ESP32-C6-LCD-1.47 router dashboard"
+    depends on IDF_TARGET_ESP32C6
+    default n
+    help
+        Enable the onboard 172x320 ST7789 display on the Waveshare
+        ESP32-C6-LCD-1.47. The dashboard is status-only because this board
+        has no touch controller. GPIO6/7 drive SPI, GPIO14 is CS, GPIO15 is
+        DC, GPIO21 is reset, and GPIO22 controls the backlight.
+
+endmenu

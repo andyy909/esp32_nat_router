@@ -6,13 +6,14 @@
 set -e  # Exit on any error
 
 # Build targets in order
-BUILD_ORDER=("esp32" "wt32_eth01" "esp32s3" "esp32c5" "esp32c6" "esp32c3")
+BUILD_ORDER=("esp32" "wt32_eth01" "esp32s3" "esp32c5" "esp32c6" "waveshare_c6_lcd_1_47" "esp32c3")
 
 # Target descriptions
 declare -A TARGET_DESC=(
     ["esp32"]="ESP32 (Original)"
     ["esp32s3"]="ESP32-S3"
     ["esp32c6"]="ESP32-C6"
+    ["waveshare_c6_lcd_1_47"]="Waveshare ESP32-C6-LCD-1.47"
     ["esp32c3"]="ESP32-C3"
     ["esp32c5"]="ESP32-C5"
     ["wt32_eth01"]="WT32-ETH01 (Ethernet)"
@@ -23,6 +24,7 @@ declare -A TARGET_CHIP=(
     ["esp32"]="esp32"
     ["esp32s3"]="esp32s3"
     ["esp32c6"]="esp32c6"
+    ["waveshare_c6_lcd_1_47"]="esp32c6"
     ["esp32c3"]="esp32c3"
     ["esp32c5"]="esp32c5"
     ["wt32_eth01"]="esp32"
@@ -31,16 +33,19 @@ declare -A TARGET_CHIP=(
 # Extra sdkconfig defaults (semicolon-separated)
 declare -A TARGET_SDKCONFIG=(
     ["wt32_eth01"]="sdkconfig.defaults;sdkconfig.defaults.wt32_eth01"
+    ["waveshare_c6_lcd_1_47"]="sdkconfig.defaults;sdkconfig.defaults.waveshare_c6_lcd_1_47"
 )
 
 # Custom build directory (empty = default "build")
 declare -A TARGET_BUILD_DIR=(
     ["wt32_eth01"]="build_eth"
+    ["waveshare_c6_lcd_1_47"]="build_waveshare_c6_lcd_1_47"
 )
 
 # Custom sdkconfig file path (empty = default "sdkconfig")
 declare -A TARGET_SDKCONFIG_FILE=(
     ["wt32_eth01"]="sdkconfig.eth"
+    ["waveshare_c6_lcd_1_47"]="sdkconfig.waveshare_c6_lcd_1_47"
 )
 
 # Colors for output

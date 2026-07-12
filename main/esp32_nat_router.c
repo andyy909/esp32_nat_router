@@ -1544,8 +1544,8 @@ void app_main(void)
         start_webserver((uint16_t)web_port_setting);
     }
 
-    // mDNS is disabled on ESP32-C5 to keep the image inside the app partition.
-#if !defined(CONFIG_IDF_TARGET_ESP32C5)
+    // mDNS is disabled on compact targets to keep the image inside the app partition.
+#if !defined(CONFIG_IDF_TARGET_ESP32C5) && !CONFIG_WAVESHARE_C6_LCD_1_47
     // Initialize mDNS responder. The espressif/mdns component, with the
     // default predefined-netif config (STA/AP/ETH all enabled), automatically
     // answers queries on whichever interface received them and replies with
@@ -1570,14 +1570,12 @@ void app_main(void)
 
     free(web_disabled);
 
-    // Initialize PCAP capture (TCP server on port 19000)
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
+    // Optional diagnostics omitted from the compact LCD build.
     pcap_init();
-
-    // Initialize remote console (TCP server on port 2323, disabled by default)
     remote_console_init();
-
-    // Initialize syslog client (UDP forwarding, disabled by default)
     syslog_init();
+#endif
 
     // Initialize OLED display (ESP32-S3 defaults to enabled on GPIO17/18)
     oled_display_init();
