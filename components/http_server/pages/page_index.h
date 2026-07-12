@@ -1,4 +1,4 @@
-/* Index page templates - Andi Edition live dashboard */
+/* Index page templates - Klischtronik Mod live dashboard */
 #include "router_config.h"
 
 #if CONFIG_ETH_UPLINK
@@ -110,7 +110,7 @@ document.addEventListener('visibilitychange',function(){if(!document.hidden)wind
 <div class='header'>\
 <div class='brand'>\
 <a href='/'><img src='/favicon.png' alt='Home'></a>\
-<div><h1>" INDEX_TITLE "</h1><span class='edition'>Andi Edition · Live Dashboard</span></div>\
+<div><h1>" INDEX_TITLE "</h1><span class='edition'>Klischtronik Mod · Live Dashboard</span></div>\
 </div>"
 /* Logout button streamed here */
 

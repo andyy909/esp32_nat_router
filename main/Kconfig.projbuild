@@ -52,6 +52,18 @@ menu "NAT Router Uplink"
 
 endmenu
 
+menu "CYD Touch Display"
+
+    config CYD_DISPLAY
+        bool "ESP32-2432S028 CYD2USB ST7789/XPT2046 display"
+        default n
+        depends on IDF_TARGET_ESP32
+        help
+            Enables the 320x240 touch dashboard for the dual-USB
+            ESP32-2432S028R Cheap Yellow Display board.
+
+endmenu
+
 menu "MQTT Home Assistant"
 
     config MQTT_HOMEASSISTANT

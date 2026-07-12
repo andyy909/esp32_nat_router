@@ -1,4 +1,4 @@
-# ESP32 NAT Router - Andi Edition
+# ESP32 NAT Router - Klischtronik Mod
 
 Diese Variante basiert auf dem aktuellen Stand von `martin-ger/esp32_nat_router` und ergaenzt zunaechst die Funktionen, die im taeglichen Einsatz den groessten Nutzen bringen, ohne den Netzwerkpfad oder NAT-Code unnoetig zu destabilisieren.
 
@@ -11,6 +11,11 @@ Passende Firmware-Ausgabe:
 - `firmware_esp32/esp32_nat_router.bin`
 
 C3-Unterstuetzung bleibt im Projekt enthalten, ist fuer dieses konkrete Geraet aber nicht relevant.
+
+Zusaetzlich wird das dual-USB `ESP32-2432S028` (CYD2USB) unterstuetzt. Diese
+Boardrevision verwendet einen `ST7789` im SPI-Modus 3 und einen
+`XPT2046`-Touchcontroller. Sie benoetigt wegen ihrer abweichenden
+Partitionierung die Dateien aus `firmware_klischtronik/cyd2usb_st7789/`.
 
 ## Neu in Version 1
 
@@ -30,6 +35,9 @@ C3-Unterstuetzung bleibt im Projekt enthalten, ist fuer dieses konkrete Geraet a
 - neuer Menuepunkt `Zugriffsmodus` mit drei unabhaengigen Schaltern fuer Internet, Kommunikation zwischen ESP32-Clients und Zugriff auf private Netze hinter dem Uplink
 - vier Schnellwahlen: nur Internet, nur Geraetenetz, Geraete und Internet sowie alles erlauben
 - Zugriffsregeln werden sofort angewendet und dauerhaft in NVS gespeichert
+- dunkle 320x240-Touchoberflaeche fuer das CYD2USB mit Live-Status
+- WLAN-Scan und Auswahl des Uplink-Netzes direkt am CYD-Display
+- Bildschirmtastatur zur Passworteingabe; offene Netze werden ebenfalls unterstuetzt
 
 ## Bewusst nicht in Version 1
 
@@ -47,6 +55,13 @@ idf.py build
 ```
 
 Ein Binary fuer eine andere Zielplattform darf nicht geflasht werden.
+
+Fuer das CYD2USB-Profil:
+
+```bash
+idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.cyd" set-target esp32
+idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.cyd" build
+```
 
 ## Flashen auf ESP32-WROOM-32
 
@@ -84,6 +99,10 @@ Zusaetzlich geprueft:
 - statischer Live-Dashboard-Test aus `page_index.h`: JavaScript-Syntax ok, alle Live-IDs vorhanden, Status- und Client-Tabelle vorhanden
 - Browser-Test mit simulierten Router-Antworten fuer Desktop- und Mobilansicht
 - dynamische Geraetenamen und Fehlermeldungen auf der Client-Seite werden HTML-sicher ausgegeben
+- CYD2USB startet mit ST7789 und XPT2046 ohne Panic oder Watchdog-Reset
+- Touchausrichtung, WLAN-Scan mit sechs Ergebnissen, Netzwerkauswahl und Bildschirmtastatur wurden auf echter Hardware geprueft
+- regulaerer ESP32-Build: `0x15d270` von `0x180000`, frei `0x22d90` (9%)
+- ESP32-S3-N16R8-Build: `0x165090` von `0x300000`, frei `0x19af70` (54%)
 
 Hardwaretests wurden auf klassischen ESP32-WROOM-32-Boards durchgefuehrt. Der
 zusaetzliche ESP32-S3-N16R8-Build wurde auf einem HW-678 Rev. 0.2 geflasht und

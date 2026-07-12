@@ -67,6 +67,7 @@
 #include "remote_console.h"
 #include "syslog_client.h"
 #include "oled_display.h"
+#include "cyd_display.h"
 #include "led_strip_status.h"
 #if !defined(CONFIG_IDF_TARGET_ESP32C5)
 #include "mdns.h"
@@ -1580,6 +1581,9 @@ void app_main(void)
 
     // Initialize OLED display (ESP32-S3 defaults to enabled on GPIO17/18)
     oled_display_init();
+
+    // Initialize the optional ESP32-2432S028R touch dashboard.
+    cyd_display_init();
 
     initialize_console();
 
