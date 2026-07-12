@@ -19,6 +19,7 @@
 #include "esp_lcd_touch.h"
 #include "esp_lcd_touch_xpt2046.h"
 #include "esp_log.h"
+#include "esp_netif_ip_addr.h"
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
@@ -27,6 +28,7 @@
 #include "lvgl.h"
 
 #include "router_config.h"
+#include "dhcp_reservations.h"
 #include "wifi_config.h"
 
 #define LCD_HOST            SPI2_HOST
@@ -74,6 +76,7 @@ static lv_disp_draw_buf_t s_draw_buf;
 static lv_obj_t *s_status_page;
 static lv_obj_t *s_access_page;
 static lv_obj_t *s_wifi_page;
+static lv_obj_t *s_devices_page;
 static lv_obj_t *s_uplink_value;
 static lv_obj_t *s_uplink_detail;
 static lv_obj_t *s_client_value;
@@ -90,7 +93,9 @@ static lv_obj_t *s_wifi_result_list;
 static lv_obj_t *s_wifi_selected_label;
 static lv_obj_t *s_wifi_password;
 static lv_obj_t *s_wifi_keyboard;
-static lv_obj_t *s_wifi_nav_buttons[3];
+static lv_obj_t *s_wifi_nav_buttons[4];
+static lv_obj_t *s_devices_summary;
+static lv_obj_t *s_devices_list;
 static cyd_wifi_entry_t s_wifi_entries[WIFI_SCAN_MAX];
 static char s_selected_ssid[33];
 static wifi_auth_mode_t s_selected_authmode;
@@ -207,6 +212,8 @@ static void show_page(uint8_t page)
     else lv_obj_add_flag(s_access_page, LV_OBJ_FLAG_HIDDEN);
     if (page == 2) lv_obj_clear_flag(s_wifi_page, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(s_wifi_page, LV_OBJ_FLAG_HIDDEN);
+    if (page == 3) lv_obj_clear_flag(s_devices_page, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(s_devices_page, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void nav_event(lv_event_t *event)
@@ -218,13 +225,14 @@ static void add_nav(lv_obj_t *page, uint8_t active_page)
 {
     static const char *labels[] = {
         LV_SYMBOL_HOME " Status",
-        LV_SYMBOL_SETTINGS " Zugriff",
+        LV_SYMBOL_SETTINGS " Modus",
         LV_SYMBOL_WIFI " WLAN",
+        LV_SYMBOL_LIST " Clients",
     };
-    for (uint8_t i = 0; i < 3; i++) {
+    for (uint8_t i = 0; i < 4; i++) {
         lv_obj_t *button = lv_btn_create(page);
-        lv_obj_set_pos(button, 5 + i * 105, 204);
-        lv_obj_set_size(button, 100, 29);
+        lv_obj_set_pos(button, 5 + i * 77, 204);
+        lv_obj_set_size(button, 74, 29);
         lv_obj_set_ext_click_area(button, 8);
         lv_obj_set_style_radius(button, 5, 0);
         lv_obj_set_style_bg_color(button,
@@ -246,6 +254,56 @@ static void format_rate(uint64_t bytes, char *buf, size_t len)
         snprintf(buf, len, "%.0f KB/s", bytes / 1024.0);
     } else {
         snprintf(buf, len, "%" PRIu64 " B/s", bytes);
+    }
+}
+
+static void devices_update(lv_timer_t *timer)
+{
+    (void)timer;
+    if (s_current_page != 3) return;
+
+    connected_client_t clients[AP_MAX_CONNECTIONS];
+    int count = get_connected_clients(clients, AP_MAX_CONNECTIONS);
+    char text[64];
+    snprintf(text, sizeof(text), "%d verbunden", count);
+    lv_label_set_text(s_devices_summary, text);
+    lv_obj_clean(s_devices_list);
+
+    if (count == 0) {
+        lv_obj_t *empty = make_label(s_devices_list, "Keine Geraete verbunden", 0, 58,
+                                     &lv_font_montserrat_16, lv_color_hex(0x8295A5));
+        lv_obj_set_width(empty, 296);
+        lv_obj_set_style_text_align(empty, LV_TEXT_ALIGN_CENTER, 0);
+        return;
+    }
+
+    for (int i = 0; i < count; i++) {
+        lv_obj_t *row = lv_obj_create(s_devices_list);
+        lv_obj_set_pos(row, 0, i * 40);
+        lv_obj_set_size(row, 296, 37);
+        lv_obj_set_style_radius(row, 5, 0);
+        lv_obj_set_style_bg_color(row, lv_color_hex(0x16202A), 0);
+        lv_obj_set_style_border_color(row, lv_color_hex(0x273746), 0);
+        lv_obj_set_style_border_width(row, 1, 0);
+        lv_obj_set_style_pad_all(row, 0, 0);
+        lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+
+        const char *name = clients[i].name[0] ? clients[i].name : "Unbekanntes Geraet";
+        lv_obj_t *name_label = make_label(row, name, 7, 2, LV_FONT_DEFAULT,
+                                          lv_color_hex(0xEAF4F8));
+        lv_label_set_long_mode(name_label, LV_LABEL_LONG_DOT);
+        lv_obj_set_width(name_label, 132);
+
+        char ip[16] = "keine IP";
+        if (clients[i].has_ip) {
+            esp_ip4_addr_t addr = { .addr = clients[i].ip };
+            snprintf(ip, sizeof(ip), IPSTR, IP2STR(&addr));
+        }
+        make_label(row, ip, 148, 2, LV_FONT_DEFAULT, lv_color_hex(0x52D8E8));
+        snprintf(text, sizeof(text), "%02X:%02X:%02X:%02X:%02X:%02X",
+                 clients[i].mac[0], clients[i].mac[1], clients[i].mac[2],
+                 clients[i].mac[3], clients[i].mac[4], clients[i].mac[5]);
+        make_label(row, text, 7, 19, LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
     }
 }
 
@@ -355,14 +413,28 @@ static void wifi_restart_timer(lv_timer_t *timer)
     esp_restart();
 }
 
+static void wifi_password_back(void)
+{
+    lv_keyboard_set_textarea(s_wifi_keyboard, NULL);
+    lv_textarea_set_text(s_wifi_password, "");
+    lv_obj_add_flag(s_wifi_password_panel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(s_wifi_scan_panel, LV_OBJ_FLAG_HIDDEN);
+    for (uint8_t i = 0; i < 4; i++) {
+        lv_obj_clear_flag(s_wifi_nav_buttons[i], LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+static void wifi_back_event(lv_event_t *event)
+{
+    (void)event;
+    wifi_password_back();
+}
+
 static void wifi_keyboard_event(lv_event_t *event)
 {
     lv_event_code_t code = lv_event_get_code(event);
     if (code == LV_EVENT_CANCEL) {
-        lv_obj_add_flag(s_wifi_password_panel, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(s_wifi_scan_panel, LV_OBJ_FLAG_HIDDEN);
-        lv_keyboard_set_textarea(s_wifi_keyboard, NULL);
-        for (uint8_t i = 0; i < 3; i++) lv_obj_clear_flag(s_wifi_nav_buttons[i], LV_OBJ_FLAG_HIDDEN);
+        wifi_password_back();
         return;
     }
     if (code != LV_EVENT_READY) return;
@@ -414,7 +486,7 @@ static void wifi_network_event(lv_event_t *event)
     lv_keyboard_set_textarea(s_wifi_keyboard, s_wifi_password);
     lv_obj_add_flag(s_wifi_scan_panel, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(s_wifi_password_panel, LV_OBJ_FLAG_HIDDEN);
-    for (uint8_t i = 0; i < 3; i++) lv_obj_add_flag(s_wifi_nav_buttons[i], LV_OBJ_FLAG_HIDDEN);
+    for (uint8_t i = 0; i < 4; i++) lv_obj_add_flag(s_wifi_nav_buttons[i], LV_OBJ_FLAG_HIDDEN);
 }
 
 static void wifi_render_results(void)
@@ -546,8 +618,7 @@ static void create_ui(void)
     lv_obj_set_size(s_status_dot, 10, 10);
     lv_obj_set_style_radius(s_status_dot, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_border_width(s_status_dot, 0, 0);
-    make_label(s_status_page, "KLISCHTRONIK", 28, 7, &lv_font_montserrat_20, lv_color_hex(0x52D8E8));
-    make_label(s_status_page, "MOD | DARK", 232, 10, LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
+    make_label(s_status_page, "STATUS", 28, 7, &lv_font_montserrat_20, lv_color_hex(0x52D8E8));
 
     lv_obj_t *uplink = make_card(s_status_page, 8, 37, 304, 58);
     make_label(uplink, "UPLINK", 0, 0, LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
@@ -577,7 +648,6 @@ static void create_ui(void)
     lv_obj_set_style_pad_all(s_access_page, 0, 0);
     lv_obj_clear_flag(s_access_page, LV_OBJ_FLAG_SCROLLABLE);
     make_label(s_access_page, "ZUGRIFFSMODUS", 10, 7, &lv_font_montserrat_20, lv_color_hex(0x52D8E8));
-    make_label(s_access_page, "DARK", 272, 10, LV_FONT_DEFAULT, lv_color_hex(0x52D8E8));
     make_label(s_access_page, "Aenderungen gelten sofort", 10, 30, LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
 
     preset_button(s_access_page, "Internet", 8, 49, 1);
@@ -592,6 +662,26 @@ static void create_ui(void)
     s_switch_private = access_row(s_access_page, "Bezugsnetz", "Private Uplink-Netze", 168,
                                    access_private_enabled);
     add_nav(s_access_page, 1);
+
+    s_devices_page = lv_obj_create(screen);
+    lv_obj_set_size(s_devices_page, LCD_HRES, LCD_VRES);
+    lv_obj_set_style_bg_opa(s_devices_page, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_devices_page, 0, 0);
+    lv_obj_set_style_pad_all(s_devices_page, 0, 0);
+    lv_obj_clear_flag(s_devices_page, LV_OBJ_FLAG_SCROLLABLE);
+    make_label(s_devices_page, "VERBUNDENE GERAETE", 10, 7, &lv_font_montserrat_20,
+               lv_color_hex(0x52D8E8));
+    s_devices_summary = make_label(s_devices_page, "0 verbunden", 10, 29,
+                                   LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
+    s_devices_list = lv_obj_create(s_devices_page);
+    lv_obj_set_pos(s_devices_list, 8, 43);
+    lv_obj_set_size(s_devices_list, 304, 155);
+    lv_obj_set_style_bg_opa(s_devices_list, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_devices_list, 0, 0);
+    lv_obj_set_style_pad_all(s_devices_list, 0, 0);
+    lv_obj_set_scroll_dir(s_devices_list, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(s_devices_list, LV_SCROLLBAR_MODE_AUTO);
+    add_nav(s_devices_page, 3);
 
     s_wifi_page = lv_obj_create(screen);
     lv_obj_set_size(s_wifi_page, LCD_HRES, LCD_VRES);
@@ -636,16 +726,26 @@ static void create_ui(void)
     s_wifi_selected_label = make_label(s_wifi_password_panel, "WLAN-Passwort", 9, 2,
                                        LV_FONT_DEFAULT, lv_color_hex(0x52D8E8));
     lv_label_set_long_mode(s_wifi_selected_label, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(s_wifi_selected_label, 302);
+    lv_obj_set_width(s_wifi_selected_label, 220);
+    lv_obj_t *back_button = lv_btn_create(s_wifi_password_panel);
+    lv_obj_set_pos(back_button, 236, 1);
+    lv_obj_set_size(back_button, 76, 20);
+    lv_obj_set_style_radius(back_button, 4, 0);
+    lv_obj_set_style_bg_color(back_button, lv_color_hex(0x223241), 0);
+    lv_obj_add_event_cb(back_button, wifi_back_event, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *back_label = lv_label_create(back_button);
+    lv_label_set_text(back_label, LV_SYMBOL_LEFT " Zurueck");
+    lv_obj_set_style_text_font(back_label, LV_FONT_DEFAULT, 0);
+    lv_obj_center(back_label);
     s_wifi_password = lv_textarea_create(s_wifi_password_panel);
-    lv_obj_set_pos(s_wifi_password, 8, 21);
-    lv_obj_set_size(s_wifi_password, 304, 35);
+    lv_obj_set_pos(s_wifi_password, 8, 23);
+    lv_obj_set_size(s_wifi_password, 304, 32);
     lv_textarea_set_one_line(s_wifi_password, true);
     lv_textarea_set_password_mode(s_wifi_password, true);
     lv_textarea_set_placeholder_text(s_wifi_password, "Passwort");
     s_wifi_keyboard = lv_keyboard_create(s_wifi_password_panel);
-    lv_obj_set_pos(s_wifi_keyboard, 8, 59);
-    lv_obj_set_size(s_wifi_keyboard, 304, 171);
+    lv_obj_set_size(s_wifi_keyboard, 304, 173);
+    lv_obj_align(s_wifi_keyboard, LV_ALIGN_TOP_LEFT, 8, 57);
     lv_keyboard_set_mode(s_wifi_keyboard, LV_KEYBOARD_MODE_TEXT_LOWER);
     lv_obj_add_event_cb(s_wifi_keyboard, wifi_keyboard_event, LV_EVENT_ALL, NULL);
     lv_obj_add_flag(s_wifi_password_panel, LV_OBJ_FLAG_HIDDEN);
@@ -655,6 +755,7 @@ static void create_ui(void)
 
     lv_timer_create(status_update, 1000, NULL);
     lv_timer_create(wifi_scan_ui_timer, 250, NULL);
+    lv_timer_create(devices_update, 2000, NULL);
     status_update(NULL);
 }
 
@@ -703,7 +804,7 @@ static esp_err_t init_lcd(void)
     esp_err_t id_err = esp_lcd_panel_io_rx_param(io, 0x04, lcd_id, sizeof(lcd_id));
     ESP_LOGI(TAG, "LCD ID read: %s %02X %02X %02X", esp_err_to_name(id_err),
              lcd_id[0], lcd_id[1], lcd_id[2]);
-    ESP_RETURN_ON_ERROR(esp_lcd_panel_invert_color(s_panel, true), TAG, "LCD invert");
+    ESP_RETURN_ON_ERROR(esp_lcd_panel_invert_color(s_panel, false), TAG, "LCD invert");
     ESP_RETURN_ON_ERROR(esp_lcd_panel_swap_xy(s_panel, true), TAG, "LCD rotate");
     ESP_RETURN_ON_ERROR(esp_lcd_panel_mirror(s_panel, true, false), TAG, "LCD mirror");
     ESP_RETURN_ON_ERROR(esp_lcd_panel_disp_on_off(s_panel, true), TAG, "LCD on");

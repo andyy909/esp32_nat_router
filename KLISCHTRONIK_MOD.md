@@ -38,6 +38,9 @@ Partitionierung die Dateien aus `firmware_klischtronik/cyd2usb_st7789/`.
 - dunkle 320x240-Touchoberflaeche fuer das CYD2USB mit Live-Status
 - WLAN-Scan und Auswahl des Uplink-Netzes direkt am CYD-Display
 - Bildschirmtastatur zur Passworteingabe; offene Netze werden ebenfalls unterstuetzt
+- echter dunkler Displaymodus ohne invertierte Panel-Farben
+- scrollbare Liste der verbundenen Geraete mit Name, IP- und MAC-Adresse
+- eigener Zurueck-Button auf der WLAN-Passwortseite
 
 ## Bewusst nicht in Version 1
 

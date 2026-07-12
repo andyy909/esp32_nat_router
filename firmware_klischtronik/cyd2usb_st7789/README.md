@@ -37,7 +37,8 @@ Deren App beginnt bei `0x20000` und deren Partitionstabelle ist anders.
 ## Gepruefter Stand
 
 - ESP-IDF 5.4.1, Target `esp32`
-- App-Groesse: `0x19bbb0`, freier Platz im OTA-Slot: `0x44450` (14%)
+- App-Groesse: `0x19bf30`, freier Platz im OTA-Slot: `0x440d0` (14%)
 - Flash-Hash durch esptool verifiziert
 - Start, ST7789-Modus 3, XPT2046-Touch, Uplink, AP, DHCP, NAT und Webserver geprueft
 - WLAN-Scan, Ergebnisanzeige, Netzwerkauswahl und Bildschirmtastatur auf echter Hardware geprueft
+- dunkler Panelmodus, Clientliste und eigener Zurueck-Button sind enthalten
