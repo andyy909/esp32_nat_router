@@ -1,114 +1,92 @@
-# ESP32 NAT Router - Klischtronik Mod
+# ESP32 NAT Router Mod
 
-Diese Variante basiert auf dem aktuellen Stand von `martin-ger/esp32_nat_router` und ergaenzt zunaechst die Funktionen, die im taeglichen Einsatz den groessten Nutzen bringen, ohne den Netzwerkpfad oder NAT-Code unnoetig zu destabilisieren.
+This repository extends the current `martin-ger/esp32_nat_router` codebase with
+a modern live dashboard, access controls, and dedicated display-board profiles.
+The changes are designed to add practical features without destabilizing the
+core NAT and networking paths.
 
-## Zielhardware
+## Extended Features
 
-Das verwendete Board besitzt ein klassisches `ESP32-WROOM-32`-Modul auf einem 38-Pin-DevKit. Fuer den Build ist deshalb das Ziel `esp32` zu verwenden, nicht `esp32c3`.
+- Mobile live dashboard with automatic updates every five seconds
+- Uplink state, IP address, RSSI in dBm and percent, and signal indicator
+- Warnings for a disconnected uplink, weak signal, or an unprotected Web UI
+- Current upload and download rates based on exact byte counters
+- Total traffic, uptime, and connected-device overview
+- Client names, IP addresses, MAC addresses, and traffic totals
+- Access-mode page with independent controls for Internet access, communication
+  between ESP32 clients, and access to private networks behind the uplink
+- Four access presets: Internet only, device network only, devices and Internet,
+  or unrestricted access
+- Access rules are applied immediately and stored in NVS
+- Dark touch dashboard for the ESP32-2432S028 CYD2USB
+- Asynchronous Wi-Fi scanner, uplink selection, and on-screen keyboard on CYD
+- Scrollable connected-device list with separate name and MAC-address lines
+- Button-driven status, client, and Wi-Fi scanner pages on the Waveshare
+  ESP32-C6-LCD-1.47
 
-Passende Firmware-Ausgabe:
+## Supported Mod Profiles
 
-- `firmware_esp32/esp32_nat_router.bin`
+| Profile | Package | Notes |
+|---|---|---|
+| Classic ESP32-WROOM-32 | `firmware_extended/esp32_wroom32/` | 4 MB flash, OTA layout |
+| ESP32-S3 N16R8 HW-678 | `firmware_extended/esp32s3_n16r8/` | 16 MB flash, native USB, PSRAM disabled |
+| ESP32-2432S028 CYD2USB | `firmware_klischtronik/cyd2usb_st7789/` | ST7789 touch dashboard, dedicated partition layout |
+| ESP32-DevKit-C6 V1.3 N4 | `firmware_klischtronik/esp32c6_n4_uart/` | 4 MB flash, CH343 UART console |
+| Waveshare ESP32-C6-LCD-1.47 | `firmware_waveshare_c6_lcd_1_47/` | 172x320 display, BOOT-button navigation |
 
-C3-Unterstuetzung bleibt im Projekt enthalten, ist fuer dieses konkrete Geraet aber nicht relevant.
-
-Zusaetzlich wird das dual-USB `ESP32-2432S028` (CYD2USB) unterstuetzt. Diese
-Boardrevision verwendet einen `ST7789` im SPI-Modus 3 und einen
-`XPT2046`-Touchcontroller. Sie benoetigt wegen ihrer abweichenden
-Partitionierung die Dateien aus `firmware_klischtronik/cyd2usb_st7789/`.
-
-## Neu in Version 1
-
-- mobile Live-Statusanzeige auf der Startseite
-- automatische Aktualisierung alle 5 Sekunden
-- Uplink-Status mit IP-Adresse
-- Signalstaerke in dBm, Prozent und Balkenanzeige
-- Warnung bei getrenntem Uplink oder sehr schwachem Signal
-- Warnung, wenn die Weboberflaeche kein Passwort besitzt
-- aktuelle Download- und Upload-Datenrate aus exakten Byte-Zaehlern
-- gesamter Download- und Upload-Verbrauch
-- Laufzeit seit dem letzten Start
-- Uebersicht verbundener Geraete mit Name, IP, MAC und Datenverbrauch
-- direkte Verknuepfung zur Client-Verwaltung
-- technische Detailansicht bleibt einklappbar erhalten
-- Aktualisierung wird pausiert, waehrend der Browser-Tab nicht sichtbar ist
-- neuer Menuepunkt `Zugriffsmodus` mit drei unabhaengigen Schaltern fuer Internet, Kommunikation zwischen ESP32-Clients und Zugriff auf private Netze hinter dem Uplink
-- vier Schnellwahlen: nur Internet, nur Geraetenetz, Geraete und Internet sowie alles erlauben
-- Zugriffsregeln werden sofort angewendet und dauerhaft in NVS gespeichert
-- dunkle 320x240-Touchoberflaeche fuer das CYD2USB mit Live-Status
-- WLAN-Scan und Auswahl des Uplink-Netzes direkt am CYD-Display
-- Bildschirmtastatur zur Passworteingabe; offene Netze werden ebenfalls unterstuetzt
-- echter dunkler Displaymodus ohne invertierte Panel-Farben
-- scrollbare Liste der verbundenen Geraete mit Name, IP- und MAC-Adresse
-- eigener Zurueck-Button auf der WLAN-Passwortseite
-
-## Bewusst nicht in Version 1
-
-Multi-WLAN-Failover und neue Eingriffe in DHCP, NAT oder Firewall wurden noch nicht eingebaut. Solche Aenderungen sollten auf der konkreten ESP32-Variante gebaut und auf echter Hardware getestet werden, bevor sie als stabile Firmware verteilt werden.
+Do not interchange firmware files between targets. The CYD application starts
+at `0x10000`, while the standard ESP32 and ESP32-C6 application starts at
+`0x20000`.
 
 ## Build
 
-Das Projekt wird wie das Original mit ESP-IDF gebaut. Das vorhandene Skript `build_all_targets.sh` unterstuetzt ESP32, ESP32-S3, ESP32-C3, ESP32-C5, ESP32-C6 und WT32-ETH01.
-
-Fuer dieses Board gilt:
+The project uses ESP-IDF 5.4.1. A normal ESP32 build can be created with:
 
 ```bash
 idf.py set-target esp32
 idf.py build
 ```
 
-Ein Binary fuer eine andere Zielplattform darf nicht geflasht werden.
-
-Fuer das CYD2USB-Profil:
+Build the CYD2USB profile with its dedicated configuration:
 
 ```bash
-idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.cyd" set-target esp32
-idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.cyd" build
+idf.py -B build_cyd -D SDKCONFIG=sdkconfig.cyd \
+  -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.cyd" \
+  set-target esp32
+idf.py -B build_cyd -D SDKCONFIG=sdkconfig.cyd \
+  -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.cyd" build
 ```
 
-## Flashen auf ESP32-WROOM-32
-
-Die geprueften Dateien fuer das 38-Pin-DevKit liegen in `firmware_esp32/`.
-
-Mehrdatei-Flash:
+Build the Waveshare display profile with:
 
 ```bash
-esptool.py --chip esp32 \
-  --before default_reset --after hard_reset write_flash \
-  -z --flash_mode dio --flash_freq 40m --flash_size 4MB \
-  0x1000 firmware_esp32/bootloader.bin \
-  0x8000 firmware_esp32/partition-table.bin \
-  0xf000 firmware_esp32/ota_data_initial.bin \
-  0x20000 firmware_esp32/esp32_nat_router.bin
+idf.py -B build_waveshare_c6_lcd_1_47 \
+  -D SDKCONFIG=sdkconfig.waveshare_c6_lcd_1_47 \
+  -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.waveshare_c6_lcd_1_47" \
+  build
 ```
 
-Alternativ kann das zusammengefuehrte Image geflasht werden:
+## Validation Status
 
-```bash
-esptool.py --chip esp32 \
-  --before default_reset --after hard_reset write_flash \
-  --flash_mode dio --flash_freq 40m --flash_size 4MB \
-  0x0 firmware_esp32/esp32_nat_router-merged.bin
-```
+- Classic ESP32-WROOM-32: application `0x15d270` of `0x180000`, 9% free
+- ESP32-S3 N16R8: application `0x165090` of `0x300000`, 54% free
+- CYD2USB: application `0x19c1e0` of `0x1e0000`, 14% free
+- ESP32-C6 N4 UART: application `0x17cae0` of `0x180000`, 1% free
+- Waveshare ESP32-C6-LCD-1.47: application `0x1b7fa0` of `0x300000`, 43% free
+- Firmware hashes and partition-size checks passed for the packaged builds
+- CYD startup, touch, repeated Wi-Fi scans, network selection, keyboard, client
+  list, AP, DHCP, NAT, and web server were tested on hardware
+- ESP32-S3 N16R8 AP, DHCP, NAT, web server, and native USB console were tested on
+  an HW-678 revision 0.2 board
+- ESP32-C6 N4 CH343 console, router application, and AP were tested on hardware
 
-## Teststatus
+## Target Limitations
 
-Vollstaendiger ESP-IDF-Build fuer `esp32` wurde mit ESP-IDF v5.4.1 ausgefuehrt. Die erzeugte App passt in die OTA-App-Partition: `0x15b790` von `0x180000`, frei `0x24870` (10%).
+Features depend on the selected hardware and build profile. The compact
+Waveshare profile uses one 3 MB factory application partition and therefore has
+no Web UI OTA support. PCAP streaming, remote console, syslog, and mDNS are also
+disabled for that profile. Update it over USB or serial.
 
-Zusaetzlich geprueft:
-
-- `esptool image_info` fuer `firmware_esp32/esp32_nat_router.bin`: Checksum und Validation Hash gueltig
-- `esptool image_info` fuer `firmware_esp32/bootloader.bin`: Checksum und Validation Hash gueltig
-- statischer Live-Dashboard-Test aus `page_index.h`: JavaScript-Syntax ok, alle Live-IDs vorhanden, Status- und Client-Tabelle vorhanden
-- Browser-Test mit simulierten Router-Antworten fuer Desktop- und Mobilansicht
-- dynamische Geraetenamen und Fehlermeldungen auf der Client-Seite werden HTML-sicher ausgegeben
-- CYD2USB startet mit ST7789 und XPT2046 ohne Panic oder Watchdog-Reset
-- Touchausrichtung, WLAN-Scan mit sechs Ergebnissen, Netzwerkauswahl und Bildschirmtastatur wurden auf echter Hardware geprueft
-- regulaerer ESP32-Build: `0x15d270` von `0x180000`, frei `0x22d90` (9%)
-- ESP32-S3-N16R8-Build: `0x165090` von `0x300000`, frei `0x19af70` (54%)
-
-Hardwaretests wurden auf klassischen ESP32-WROOM-32-Boards durchgefuehrt. Der
-zusaetzliche ESP32-S3-N16R8-Build wurde auf einem HW-678 Rev. 0.2 geflasht und
-mit aktivem AP, DHCP, NAT, Webserver und nativer USB-Konsole gestartet. Fuer
-diesen S3-Build bleibt PSRAM bewusst deaktiviert, da der Router es nicht
-benoetigt und das konkrete Board damit zuverlaessig startet.
+Multi-Wi-Fi failover is not part of this mod. Changes to DHCP, NAT, or firewall
+internals should be built for the affected targets and verified on real hardware
+before distribution.

@@ -2,6 +2,14 @@
 
 This is a firmware to use the ESP32 as WiFi NAT router. It routes between the network of the AP interface and the STA or ETH interface as uplink network. It can also work as a VPN router using WireGuard as uplink.
 
+## Extended Mod
+
+This repository includes an **ESP32 NAT Router Mod** with a modern live Web UI,
+access-mode controls, dedicated touch and LCD dashboards, and verified firmware
+packages for selected ESP32, ESP32-S3, and ESP32-C6 boards. See the
+[mod overview](KLISCHTRONIK_MOD.md) for the complete feature list, supported
+profiles, validation status, and target-specific limitations.
+
 ## Other WiFi Router/Repeater Projects
 Starting from this code base I started several spin-off projects with slightly differrent scope. These are all (ab)using the ESP as a minimal network device. 
 
@@ -43,6 +51,11 @@ Starting from this code base I started several spin-off projects with slightly d
 - **mDNS**: The router is reachable as `esp32-nat-router.local` via mDNS/Bonjour — no need to look up the IP address.
 - **OTA Updates**: Flash new firmware directly from the Web UI
 
+Feature availability depends on the selected board and build profile. In
+particular, the compact Waveshare display firmware omits several services and
+does not support Web UI OTA updates. Check the profile documentation before
+flashing.
+
 The maximum number of simultaniously connected WiFi clients is 8 (5 on the ESP32c3) due to RAM limitations (uses about 5KB per client). Each of the features: Web Interface, PCAP Capture, Wireguard VPN, Remote Console, WPA Enterprise and MQTT Home Assistant require several KB of additional RAM. So using all of them at once will probably burst the ESP32's ressources. Unused/disabled features are optimized for minimal to no RAM usage. Have a look at remaining heap size if in doubt.
 
 ## First Boot
@@ -66,6 +79,10 @@ Flash directly from your browser — no tools or command line required:
 
 Requires a browser with Web Serial API. Select your firmware variant (WiFi or Ethernet) and click "Connect & Install".
 
+The upstream Web Installer covers the standard upstream variants. Use the
+packaged binaries and documented offsets below for the extended display and
+UART mod profiles.
+
 ### esptool (Command Line)
 
 Install [esptool](https://github.com/espressif/esptool) and flash using the pre-built binaries from the `firmware_*` directories. Example for ESP32:
@@ -80,9 +97,17 @@ esptool.py --chip esp32 \
 0x20000 firmware_esp32/esp32_nat_router.bin
 ```
 
-Pre-built binaries are available for: **ESP32**, **ESP32-C3**, **ESP32-C5**, **ESP32-C6**, **ESP32-S3**, **WT32-ETH01** (Ethernet), **ESP32-2432S028 CYD2USB**, and **Waveshare ESP32-C6-LCD-1.47**.
+Pre-built binaries are available for: **ESP32**, **ESP32-C3**, **ESP32-C5**, **ESP32-C6**, **ESP32-S3**, **WT32-ETH01** (Ethernet), **ESP32-WROOM-32 extended**, **ESP32-S3 N16R8**, **ESP32-C6 N4 UART**, **ESP32-2432S028 CYD2USB**, and **Waveshare ESP32-C6-LCD-1.47**.
 
 See the [Installation](https://github.com/martin-ger/esp32_nat_router/wiki/Installation) wiki page for all chip-specific commands.
+
+### Extended Firmware Packages
+
+- Classic ESP32-WROOM-32 and ESP32-S3 N16R8 builds are in
+  [`firmware_extended/`](firmware_extended/README.md).
+- The ESP32-C6 N4 UART build and hardware notes are in
+  [`firmware_klischtronik/esp32c6_n4_uart/`](firmware_klischtronik/esp32c6_n4_uart/README.md).
+- Display-specific packages are documented in the following section.
 
 ### Display Board Variants
 
@@ -134,7 +159,10 @@ idf.py -B build_waveshare_c6_lcd_1_47 \
 
 ## Documentation
 
-Full documentation is available in the [Wiki](https://github.com/martin-ger/esp32_nat_router/wiki):
+Upstream documentation for common router features is available in the
+[Wiki](https://github.com/martin-ger/esp32_nat_router/wiki). Mod-specific
+hardware, feature, and validation details are documented in the
+[ESP32 NAT Router Mod overview](KLISCHTRONIK_MOD.md).
 
 | Page | Description |
 |------|-------------|

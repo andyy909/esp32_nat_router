@@ -1,11 +1,12 @@
-# Klischtronik Mod fuer ESP32-2432S028 CYD2USB
+# ESP32 NAT Router Mod for ESP32-2432S028 CYD2USB
 
-Diese Firmware ist ausschliesslich fuer die dual-USB-Revision mit `ST7789`
-und `XPT2046` bestimmt. Sie verwendet 4 MB Flash und zwei 1920-KB-OTA-Slots.
+This firmware is intended only for the dual-USB board revision with an `ST7789`
+display and `XPT2046` touch controller. It uses 4 MB flash and two 1920 KB OTA
+slots.
 
-## Update ohne Verlust der Einstellungen
+## Update Without Losing Settings
 
-Wenn bereits diese CYD-Partitionstabelle installiert ist, nur die App flashen:
+If this CYD partition table is already installed, flash only the application:
 
 ```bash
 python -m esptool --chip esp32 --port COM4 --baud 460800 \
@@ -13,13 +14,14 @@ python -m esptool --chip esp32 --port COM4 --baud 460800 \
   0x10000 esp32_nat_router.bin
 ```
 
-Dadurch bleiben WLAN-Einstellungen und NVS erhalten. `COM4` bei Bedarf durch
-den tatsaechlichen Port ersetzen.
+This preserves Wi-Fi settings and NVS. Replace `COM4` with the actual port if
+necessary.
 
-## Vollstaendiger Erst-Flash
+## Complete First Installation
 
-Der Erst-Flash ersetzt Bootloader, Partitionstabelle und OTA-Metadaten. NVS ab
-`0x9000` wird nicht beschrieben, sofern der Chip vorher nicht geloescht wurde.
+The first installation replaces the bootloader, partition table, and OTA
+metadata. NVS starting at `0x9000` is not written unless the chip was erased
+beforehand.
 
 ```bash
 python -m esptool --chip esp32 --port COM4 --baud 460800 \
@@ -31,16 +33,16 @@ python -m esptool --chip esp32 --port COM4 --baud 460800 \
   0x10000 esp32_nat_router.bin
 ```
 
-Nicht die Dateien aus `firmware_esp32/` fuer dieses Displayboard verwenden:
-Deren App beginnt bei `0x20000` und deren Partitionstabelle ist anders.
+Do not use files from `firmware_esp32/` for this display board. Its application
+starts at `0x20000`, and its partition table is incompatible with this profile.
 
-## Gepruefter Stand
+## Verified Status
 
-- ESP-IDF 5.4.1, Target `esp32`
-- App-Groesse: `0x19c1e0`, freier Platz im OTA-Slot: `0x43e20` (14%)
-- Flash-Hash durch esptool verifiziert
-- Start, ST7789-Modus 3, XPT2046-Touch, Uplink, AP, DHCP, NAT und Webserver geprueft
-- WLAN-Scan, Ergebnisanzeige, Netzwerkauswahl und Bildschirmtastatur auf echter Hardware geprueft
-- Scan-Navigation gegen nachlaufende Touchereignisse abgesichert; Clientname und MAC-Adresse mit getrennten Zeilen
-- XPT2046-Messwerte gefiltert und entprellt; wiederholte WLAN-Scans ohne Sprung zur Statusseite auf echter Hardware geprueft
-- dunkler Panelmodus, Clientliste und eigener Zurueck-Button sind enthalten
+- ESP-IDF 5.4.1, target `esp32`
+- Application size: `0x19c1e0`; free OTA slot space: `0x43e20` (14%)
+- Flash hash verified with esptool
+- Startup, ST7789 mode 3, XPT2046 touch, uplink, AP, DHCP, NAT, and web server tested
+- Wi-Fi scanning, results, network selection, and on-screen keyboard tested on hardware
+- Scan navigation protected against trailing touch events; client name and MAC address use separate lines
+- XPT2046 readings filtered and debounced; repeated Wi-Fi scans tested without unintended jumps to the status page
+- Dark panel mode, client list, and a dedicated Back button are included
