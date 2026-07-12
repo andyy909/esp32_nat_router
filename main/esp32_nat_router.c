@@ -67,6 +67,7 @@
 #include "remote_console.h"
 #include "syslog_client.h"
 #include "oled_display.h"
+#include "cyd_display.h"
 #include "led_strip_status.h"
 #if !defined(CONFIG_IDF_TARGET_ESP32C5)
 #include "mdns.h"
@@ -1036,11 +1037,11 @@ void wifi_init(const uint8_t* mac, const char* ssid, const char* ent_username, c
         }
     };
 
-    strlcpy((char*)ap_config.sta.ssid, ap_ssid, sizeof(ap_config.sta.ssid));
+    strlcpy((char*)ap_config.ap.ssid, ap_ssid, sizeof(ap_config.ap.ssid));
     if (strlen(ap_passwd) < 8) {
         ap_config.ap.authmode = WIFI_AUTH_OPEN;
     } else {
-	    strlcpy((char*)ap_config.sta.password, ap_passwd, sizeof(ap_config.sta.password));
+	    strlcpy((char*)ap_config.ap.password, ap_passwd, sizeof(ap_config.ap.password));
     }
 
     // Always use APSTA mode so WiFi scanning works even without an uplink configured
@@ -1296,6 +1297,22 @@ void app_main(void)
         ESP_LOGI(TAG, "Per-client stats enabled");
     }
 
+    // Load simple access-mode policy (defaults preserve existing behavior).
+    int access_setting = 1;
+    if (get_config_param_int("acc_inet", &access_setting) == ESP_OK) {
+        access_internet_enabled = (access_setting != 0);
+    }
+    access_setting = 1;
+    if (get_config_param_int("acc_clients", &access_setting) == ESP_OK) {
+        access_clients_enabled = (access_setting != 0);
+    }
+    access_setting = 1;
+    if (get_config_param_int("acc_private", &access_setting) == ESP_OK) {
+        access_private_enabled = (access_setting != 0);
+    }
+    ESP_LOGI(TAG, "Access mode: internet=%u clients=%u private=%u",
+             access_internet_enabled, access_clients_enabled, access_private_enabled);
+
     // Load TTL override setting from NVS (default 0 = disabled)
     int ttl_setting = 0;
     if (get_config_param_int("sta_ttl", &ttl_setting) == ESP_OK) {
@@ -1527,8 +1544,8 @@ void app_main(void)
         start_webserver((uint16_t)web_port_setting);
     }
 
-    // mDNS is disabled on ESP32-C5 to keep the image inside the app partition.
-#if !defined(CONFIG_IDF_TARGET_ESP32C5)
+    // mDNS is disabled on compact targets to keep the image inside the app partition.
+#if !defined(CONFIG_IDF_TARGET_ESP32C5) && !CONFIG_WAVESHARE_C6_LCD_1_47
     // Initialize mDNS responder. The espressif/mdns component, with the
     // default predefined-netif config (STA/AP/ETH all enabled), automatically
     // answers queries on whichever interface received them and replies with
@@ -1553,17 +1570,18 @@ void app_main(void)
 
     free(web_disabled);
 
-    // Initialize PCAP capture (TCP server on port 19000)
+#if !CONFIG_WAVESHARE_C6_LCD_1_47
+    // Optional diagnostics omitted from the compact LCD build.
     pcap_init();
-
-    // Initialize remote console (TCP server on port 2323, disabled by default)
     remote_console_init();
-
-    // Initialize syslog client (UDP forwarding, disabled by default)
     syslog_init();
+#endif
 
     // Initialize OLED display (ESP32-S3 defaults to enabled on GPIO17/18)
     oled_display_init();
+
+    // Initialize the optional ESP32-2432S028R touch dashboard.
+    cyd_display_init();
 
     initialize_console();
 

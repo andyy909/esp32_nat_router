@@ -190,7 +190,12 @@ esp_err_t get_config_param_str(char* name, char** param)
                 return ESP_ERR_NO_MEM;
             }
             err = nvs_get_str(nvs, name, *param, &len);
-            ESP_LOGI(TAG, "%s %s", name, *param);
+            const bool sensitive = strstr(name, "pass") != NULL ||
+                                   strstr(name, "privkey") != NULL ||
+                                   strstr(name, "psk") != NULL ||
+                                   strstr(name, "secret") != NULL ||
+                                   strstr(name, "token") != NULL;
+            ESP_LOGI(TAG, "%s %s", name, sensitive ? "***" : *param);
         } else {
             /* Key missing (NVS_NOT_FOUND) is the common case for optional keys;
              * must still close the handle here or it leaks on every lookup —

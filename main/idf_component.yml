@@ -6,3 +6,5 @@ dependencies:
     version: '*'
     rules:
       - if: "idf_target != \"esp32c5\""
+  lvgl/lvgl: "8.3.11"
+  atanisoft/esp_lcd_touch_xpt2046: "^1.0.6"

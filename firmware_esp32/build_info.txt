@@ -1,7 +1,20 @@
 ESP32 NAT Router Build Information
 =================================
-Target: ESP32 (Original) (esp32)
-Build Time: 2026-06-19 20:23:36
-Git Hash: 0ee4ba5
-Binary Files: 4
-Build Directory: build
+Target: ESP32-WROOM-32 / classic ESP32 (esp32)
+Build Time: 2026-07-12 05:50:56 +02:00
+Git Hash: e63965b
+ESP-IDF: v5.4.1
+Build Command: idf.py set-target esp32; idf.py build
+App Binary Size: 0x15b790 bytes
+Smallest App Partition: 0x180000 bytes
+Free App Partition Space: 0x24870 bytes (10%)
+Flash Size: 4MB
+
+Flash files:
+0x1000  bootloader.bin
+0x8000  partition-table.bin
+0xf000  ota_data_initial.bin
+0x20000 esp32_nat_router.bin
+
+Alternative merged image:
+0x0     esp32_nat_router-merged.bin

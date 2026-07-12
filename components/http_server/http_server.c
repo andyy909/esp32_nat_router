@@ -1372,7 +1372,10 @@ static esp_err_t index_get_handler(httpd_req_t *req)
     char sent_buf[16], recv_buf[16];
     format_bytes_human(bytes_sent, sent_buf, sizeof(sent_buf));
     format_bytes_human(bytes_received, recv_buf, sizeof(recv_buf));
-    snprintf(row, sizeof(row), "<tr><td>Bytes:</td><td>%s sent / %s received</td></tr>", sent_buf, recv_buf);
+    snprintf(row, sizeof(row),
+             "<tr><td>Bytes:</td><td data-tx-bytes='%llu' data-rx-bytes='%llu'>%s sent / %s received</td></tr>",
+             (unsigned long long)bytes_sent, (unsigned long long)bytes_received,
+             sent_buf, recv_buf);
     SEND_CHUNK(req, row, HTTPD_RESP_USE_STRLEN);
 
     /* Stream Monitoring row */
@@ -1496,6 +1499,106 @@ static httpd_uri_t indexp_post = {
     .uri       = "/",
     .method    = HTTP_POST,
     .handler   = index_get_handler,
+};
+
+/* Simple access-mode page */
+static esp_err_t access_get_handler(httpd_req_t *req)
+{
+    resume_sta_if_scan_idle();
+
+    bool password_protection_enabled = is_web_password_set();
+    if (password_protection_enabled && !is_authenticated(req)) {
+        httpd_resp_set_status(req, "303 See Other");
+        httpd_resp_set_hdr(req, "Location", "/?auth_required=1");
+        httpd_resp_send(req, NULL, 0);
+        return ESP_OK;
+    }
+
+    bool saved = false;
+    bool save_error = false;
+
+    if (req->method == HTTP_POST) {
+        if (!check_csrf(req)) {
+            httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "CSRF check failed");
+            return ESP_FAIL;
+        }
+        if (req->content_len <= 0 || req->content_len >= 512) {
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid request body");
+            return ESP_FAIL;
+        }
+
+        char body[512];
+        int received = 0;
+        while (received < req->content_len) {
+            int n = httpd_req_recv(req, body + received, req->content_len - received);
+            if (n <= 0) {
+                httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to read request");
+                return ESP_FAIL;
+            }
+            received += n;
+        }
+        body[received] = '\0';
+
+        char value[8];
+        uint8_t internet = httpd_query_key_value(body, "acc_inet", value, sizeof(value)) == ESP_OK;
+        uint8_t clients = httpd_query_key_value(body, "acc_clients", value, sizeof(value)) == ESP_OK;
+        uint8_t private_net = httpd_query_key_value(body, "acc_private", value, sizeof(value)) == ESP_OK;
+
+        esp_err_t e1 = set_config_param_int("acc_inet", internet);
+        esp_err_t e2 = set_config_param_int("acc_clients", clients);
+        esp_err_t e3 = set_config_param_int("acc_private", private_net);
+        if (e1 == ESP_OK && e2 == ESP_OK && e3 == ESP_OK) {
+            access_internet_enabled = internet;
+            access_clients_enabled = clients;
+            access_private_enabled = private_net;
+            ESP_LOGI(TAG, "Access mode updated: internet=%u clients=%u private=%u",
+                     internet, clients, private_net);
+            httpd_resp_set_status(req, "303 See Other");
+            httpd_resp_set_hdr(req, "Location", "/access?saved=1");
+            httpd_resp_send(req, NULL, 0);
+            return ESP_OK;
+        }
+        save_error = true;
+    } else {
+        size_t query_len = httpd_req_get_url_query_len(req) + 1;
+        if (query_len > 1 && query_len < 64) {
+            char query[64];
+            char value[8];
+            if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK &&
+                httpd_query_key_value(query, "saved", value, sizeof(value)) == ESP_OK) {
+                saved = true;
+            }
+        }
+    }
+
+    httpd_resp_set_type(req, "text/html; charset=UTF-8");
+    SEND_CHUNK(req, ACCESS_PAGE_HEAD, HTTPD_RESP_USE_STRLEN);
+    if (saved) {
+        SEND_CHUNK(req, "<div class='saved'>Zugriffsmodus gespeichert.</div>", HTTPD_RESP_USE_STRLEN);
+    } else if (save_error) {
+        SEND_CHUNK(req, "<div class='saved' style='background:#3a2020;color:#ffb4b4;border-color:#713737'>Speichern fehlgeschlagen.</div>", HTTPD_RESP_USE_STRLEN);
+    }
+    char form[4096];
+    snprintf(form, sizeof(form), ACCESS_PAGE_FORM,
+             access_internet_enabled ? "checked" : "",
+             access_clients_enabled ? "checked" : "",
+             access_private_enabled ? "checked" : "");
+    SEND_CHUNK(req, form, HTTPD_RESP_USE_STRLEN);
+    SEND_CHUNK(req, ACCESS_PAGE_TAIL, HTTPD_RESP_USE_STRLEN);
+    SEND_CHUNK(req, NULL, 0);
+    return ESP_OK;
+}
+
+static httpd_uri_t accessp = {
+    .uri       = "/access",
+    .method    = HTTP_GET,
+    .handler   = access_get_handler,
+};
+
+static httpd_uri_t accessp_post = {
+    .uri       = "/access",
+    .method    = HTTP_POST,
+    .handler   = access_get_handler,
 };
 
 uint8_t web_ui_get_bind(void)
@@ -2415,7 +2518,7 @@ static esp_err_t mappings_get_handler(httpd_req_t *req)
     }
 
     /* Reusable buffer for building individual rows */
-    char row[384];
+    char row[1024];
 
     /* --- Begin chunked response --- */
 
@@ -2424,6 +2527,8 @@ static esp_err_t mappings_get_handler(httpd_req_t *req)
 
     /* Chunk 2: Error modal (if any) */
     if (error_msg[0] != '\0') {
+        char safe_error[sizeof(error_msg) * 6];
+        html_escape_to(safe_error, sizeof(safe_error), error_msg);
         snprintf(row, sizeof(row),
             "<div class='modal-overlay show' id='errorModal'>"
             "<div class='modal-box'>"
@@ -2432,7 +2537,7 @@ static esp_err_t mappings_get_handler(httpd_req_t *req)
             "<button onclick=\"document.getElementById('errorModal').classList.remove('show'); history.replaceState(null, '', '/mappings');\">OK</button>"
             "</div>"
             "</div>",
-            error_msg);
+            safe_error);
         SEND_CHUNK(req, row, HTTPD_RESP_USE_STRLEN);
     }
 
@@ -2476,17 +2581,9 @@ static esp_err_t mappings_get_handler(httpd_req_t *req)
                 clients[i].mac[2], clients[i].mac[3],
                 clients[i].mac[4], clients[i].mac[5]);
 
-            /* Escape single quotes in name for JavaScript */
-            char js_name[DHCP_RESERVATION_NAME_LEN * 2];
-            const char *src_name = clients[i].name[0] ? clients[i].name : "";
-            int j = 0;
-            for (int k = 0; src_name[k] && j < (int)sizeof(js_name) - 2; k++) {
-                if (src_name[k] == '\'') {
-                    js_name[j++] = '\\';
-                }
-                js_name[j++] = src_name[k];
-            }
-            js_name[j] = '\0';
+            char safe_name[DHCP_RESERVATION_NAME_LEN * 6];
+            html_escape_to(safe_name, sizeof(safe_name),
+                           clients[i].name[0] ? clients[i].name : "-");
 
             if (client_stats_enabled) {
                 /* Find matching traffic stats by MAC */
@@ -2503,18 +2600,18 @@ static esp_err_t mappings_get_handler(httpd_req_t *req)
                 snprintf(row, sizeof(row),
                     "<tr>"
                     "<td>%s</td><td>%s</td><td>%s</td><td>%s</td>"
-                    "<td><button type='button' class='select-button' onclick=\"fillDhcpForm('%s','%s','%s')\">Select</button></td>"
+                    "<td><button type='button' class='select-button' data-mac='%s' data-ip='%s' data-name='%s' onclick=\"fillDhcpForm(this.dataset.mac,this.dataset.ip,this.dataset.name)\">Select</button></td>"
                     "</tr>",
-                    mac_str, ip_str, clients[i].name[0] ? clients[i].name : "-", traffic_str,
-                    mac_str, clients[i].has_ip ? ip_str : "", js_name);
+                    mac_str, ip_str, safe_name, traffic_str,
+                    mac_str, clients[i].has_ip ? ip_str : "", safe_name);
             } else {
                 snprintf(row, sizeof(row),
                     "<tr>"
                     "<td>%s</td><td>%s</td><td>%s</td>"
-                    "<td><button type='button' class='select-button' onclick=\"fillDhcpForm('%s','%s','%s')\">Select</button></td>"
+                    "<td><button type='button' class='select-button' data-mac='%s' data-ip='%s' data-name='%s' onclick=\"fillDhcpForm(this.dataset.mac,this.dataset.ip,this.dataset.name)\">Select</button></td>"
                     "</tr>",
-                    mac_str, ip_str, clients[i].name[0] ? clients[i].name : "-",
-                    mac_str, clients[i].has_ip ? ip_str : "", js_name);
+                    mac_str, ip_str, safe_name,
+                    mac_str, clients[i].has_ip ? ip_str : "", safe_name);
             }
             SEND_CHUNK(req, row, HTTPD_RESP_USE_STRLEN);
         }
@@ -2550,6 +2647,9 @@ static esp_err_t mappings_get_handler(httpd_req_t *req)
     for (int i = 0; i < MAX_DHCP_RESERVATIONS; i++) {
         if (dhcp_reservations[i].valid) {
             has_reservations = true;
+            char safe_name[DHCP_RESERVATION_NAME_LEN * 6];
+            html_escape_to(safe_name, sizeof(safe_name),
+                           dhcp_reservations[i].name[0] ? dhcp_reservations[i].name : "-");
             char ip_col[64];
             if (dhcp_reservations[i].ip == 0) {
                 snprintf(ip_col, sizeof(ip_col), "<span style='color:#ff5252;font-weight:bold;'>BLOCKED</span>");
@@ -2570,7 +2670,7 @@ static esp_err_t mappings_get_handler(httpd_req_t *req)
                 dhcp_reservations[i].mac[2], dhcp_reservations[i].mac[3],
                 dhcp_reservations[i].mac[4], dhcp_reservations[i].mac[5],
                 ip_col,
-                dhcp_reservations[i].name[0] ? dhcp_reservations[i].name : "-",
+                safe_name,
                 dhcp_reservations[i].mac[0], dhcp_reservations[i].mac[1],
                 dhcp_reservations[i].mac[2], dhcp_reservations[i].mac[3],
                 dhcp_reservations[i].mac[4], dhcp_reservations[i].mac[5]
@@ -2598,9 +2698,9 @@ static esp_err_t mappings_get_handler(httpd_req_t *req)
                 has_mappings = true;
 
                 const char *name = lookup_device_name_by_ip(portmap_tab[i].daddr);
-                char ip_or_name[DHCP_RESERVATION_NAME_LEN];
+                char ip_or_name[DHCP_RESERVATION_NAME_LEN * 6];
                 if (name) {
-                    snprintf(ip_or_name, sizeof(ip_or_name), "%s", name);
+                    html_escape_to(ip_or_name, sizeof(ip_or_name), name);
                 } else {
                     esp_ip4_addr_t addr;
                     addr.addr = portmap_tab[i].daddr;
@@ -3606,8 +3706,7 @@ httpd_handle_t start_webserver(uint16_t port)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = port;
     config.stack_size = 16384;  // Large stack needed for mappings page with 3x 2KB HTML buffers
-    config.max_uri_handlers = 14;
-    config.max_uri_len = 1024;
+    config.max_uri_handlers = 16;
     config.open_fn = http_open_fn;
     /* Fail a stalled send/recv fast (default 5s) so an abandoned connection
      * frees its socket and buffers quickly instead of pinning them; paired
@@ -3640,6 +3739,8 @@ httpd_handle_t start_webserver(uint16_t port)
         ESP_LOGI(TAG, "Registering URI handlers");
         httpd_register_uri_handler(server, &indexp);
         httpd_register_uri_handler(server, &indexp_post);
+        httpd_register_uri_handler(server, &accessp);
+        httpd_register_uri_handler(server, &accessp_post);
         httpd_register_uri_handler(server, &configp);
         httpd_register_uri_handler(server, &mappingsp);
         httpd_register_uri_handler(server, &firewallp);

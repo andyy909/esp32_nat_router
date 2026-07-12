@@ -37,6 +37,7 @@ Starting from this code base I started several spin-off projects with slightly d
 - **Remote Console**: Network-accessible CLI via TCP (password protected, per-interface binding)
 - **LED Status Indicator**: Visual feedback via plain GPIO LED or addressable LED strip (WS2812/SK6812) with color-coded status
 - **OLED Display**: Status display on 72x40 I2C SSD1306 OLEDs (as found on some ESP32-C3 mini boards)
+- **LCD Dashboards**: Touch UI for the ESP32-2432S028 CYD2USB and a button-driven status dashboard for the Waveshare ESP32-C6-LCD-1.47
 - **MQTT Home Assistant**: Publish telemetry and per-client stats to MQTT with HA auto-discovery
 - **MCP Bridge (AI-Ready)**: BETA - Control the router from AI assistants (Claude, etc.) via the Model Context Protocol
 - **mDNS**: The router is reachable as `esp32-nat-router.local` via mDNS/Bonjour — no need to look up the IP address.
@@ -79,9 +80,57 @@ esptool.py --chip esp32 \
 0x20000 firmware_esp32/esp32_nat_router.bin
 ```
 
-Pre-built binaries are available for: **ESP32**, **ESP32-C3**, **ESP32-C5**, **ESP32-C6**, **ESP32-S3**, and **WT32-ETH01** (Ethernet).
+Pre-built binaries are available for: **ESP32**, **ESP32-C3**, **ESP32-C5**, **ESP32-C6**, **ESP32-S3**, **WT32-ETH01** (Ethernet), **ESP32-2432S028 CYD2USB**, and **Waveshare ESP32-C6-LCD-1.47**.
 
 See the [Installation](https://github.com/martin-ger/esp32_nat_router/wiki/Installation) wiki page for all chip-specific commands.
+
+### Display Board Variants
+
+#### ESP32-2432S028 CYD2USB
+
+The dual-USB CYD2USB profile supports the 320x240 ST7789 display and XPT2046
+touch controller. Its dark touch dashboard provides live router status, access
+modes, connected clients, and an asynchronous WiFi scan with uplink network
+selection and an on-screen keyboard.
+
+Use only the dedicated 4 MB binaries in
+`firmware_klischtronik/cyd2usb_st7789/`. The app starts at `0x10000`; the
+regular `firmware_esp32/` partition layout is not compatible with this board.
+Detailed flash commands and hardware notes are in
+[`firmware_klischtronik/cyd2usb_st7789/README.md`](firmware_klischtronik/cyd2usb_st7789/README.md).
+
+Build the CYD profile with ESP-IDF 5.4.1:
+
+```bash
+idf.py -B build_cyd -D SDKCONFIG=sdkconfig.cyd \
+  -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.cyd" \
+  set-target esp32
+idf.py -B build_cyd -D SDKCONFIG=sdkconfig.cyd \
+  -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.cyd" build
+```
+
+#### Waveshare ESP32-C6-LCD-1.47
+
+This profile drives the onboard 172x320 ST7789 display. A short press on the
+BOOT button cycles through router status, connected devices, and a WiFi scanner;
+entering the scanner page starts a fresh non-blocking scan. The board has no
+touch controller, so the scanner is display-only. Backlight PWM is limited to
+50 percent duty.
+
+Pre-built files are in `firmware_waveshare_c6_lcd_1_47/`, with the matching ESP
+Web Tools definition in `manifest_waveshare_c6_lcd_1_47.json`. This compact
+target uses a single 3 MB factory app partition, so Web UI OTA is unavailable;
+update it over USB/serial instead. PCAP streaming, remote console, syslog, and
+mDNS are omitted from this profile to keep the image within its resource budget.
+
+Build it with:
+
+```bash
+idf.py -B build_waveshare_c6_lcd_1_47 \
+  -D SDKCONFIG=sdkconfig.waveshare_c6_lcd_1_47 \
+  -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.waveshare_c6_lcd_1_47" \
+  build
+```
 
 ## Documentation
 

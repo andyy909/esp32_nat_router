@@ -55,6 +55,11 @@ extern uint16_t ap_mss_clamp;
 // Path MTU for AP clients (0 = disabled, otherwise send ICMP Frag Needed when DF packets exceed this)
 extern uint16_t ap_pmtu;
 
+// Simple access-mode policy (persisted in NVS, default: all allowed)
+extern volatile uint8_t access_internet_enabled;
+extern volatile uint8_t access_clients_enabled;
+extern volatile uint8_t access_private_enabled;
+
 // Byte counting functions
 void init_byte_counter(void);
 uint64_t get_sta_bytes_sent(void);
