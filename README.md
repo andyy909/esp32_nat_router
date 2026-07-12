@@ -54,7 +54,7 @@ After first boot the ESP32 NAT Router will offer a WiFi network with an open AP 
 3. Configure your upstream WiFi and AP settings on the Getting Started page
 4. Click **Save & Reboot**
 
-<img src="https://raw.githubusercontent.com/martin-ger/esp32_nat_router/master/UI_Index.png">
+<img src="UI_Index.png" alt="ESP32 NAT Router live dashboard">
 
 ## Flashing Pre-built Binaries
 
