@@ -1,5 +1,6 @@
 build/**
 build_eth/**
+build_s3/**
 .pio*
 .vscode
 .vscode/*

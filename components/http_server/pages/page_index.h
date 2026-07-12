@@ -75,6 +75,7 @@ function setClass(id,state){var el=document.getElementById(id);if(!el)return;el.
 function rowsMap(doc){var map={},rows=doc.querySelectorAll('.status-table tr');for(var i=0;i<rows.length;i++){var c=rows[i].querySelectorAll('td');if(c.length>1){var k=text(c[0]).replace(/:$/,'');map[k]=text(c[1]);}}return map;}\
 function unitBytes(n,u){var m={B:1,KB:1024,MB:1048576,GB:1073741824,TB:1099511627776};return n*(m[u]||1);}\
 function parseBytes(s){var r=/([0-9.]+)\\s*(B|KB|MB|GB|TB)\\s*sent\\s*\\/\\s*([0-9.]+)\\s*(B|KB|MB|GB|TB)\\s*received/i.exec(s||'');return r?{tx:unitBytes(parseFloat(r[1]),r[2].toUpperCase()),rx:unitBytes(parseFloat(r[3]),r[4].toUpperCase())}:null;}\
+function exactBytes(doc){var rows=doc.querySelectorAll('.status-table tr');for(var i=0;i<rows.length;i++){var c=rows[i].querySelectorAll('td');if(c.length>1&&text(c[0]).replace(/:$/,'')==='Bytes'){var tx=c[1].getAttribute('data-tx-bytes'),rx=c[1].getAttribute('data-rx-bytes');if(tx!==null&&rx!==null)return{tx:parseFloat(tx),rx:parseFloat(rx)};}}return null;}\
 function speed(v){if(!isFinite(v)||v<0)return '—';var u=['B/s','KB/s','MB/s','GB/s'],i=0;while(v>=1024&&i<u.length-1){v/=1024;i++;}return (v>=100||i===0?v.toFixed(0):v>=10?v.toFixed(1):v.toFixed(2))+' '+u[i];}\
 function humanBytes(v){if(!isFinite(v)||v<0)return '—';var u=['B','KB','MB','GB','TB'],i=0;while(v>=1024&&i<u.length-1){v/=1024;i++;}return (v>=100||i===0?v.toFixed(0):v>=10?v.toFixed(1):v.toFixed(2))+' '+u[i];}\
 function signalQuality(rssi){return Math.max(0,Math.min(100,2*(rssi+100)));}\
@@ -87,7 +88,7 @@ setText('live-uplink',connected?'Online':'Offline');setClass('live-uplink',conne
 setText('live-clients',clients||'0');setText('live-clients-sub',(clients==='1'?'Gerät verbunden':'Geräte verbunden'));\
 setText('live-uptime',uptime?uptime.split(' (')[0]:'—');setText('live-uptime-sub',uptime.indexOf('since ')>=0?uptime.split('since ')[1].replace(')',''):'seit dem letzten Start');\
 setText('live-signal',rssi===null?'—':rssi+' dBm');setClass('live-signal',rssi===null?'':rssi<-78?'bad':rssi<-68?'warn':'good');setText('live-signal-sub',rssi===null?'keine Messung':Math.round(q)+' % Qualität');signalBars(q);\
-var b=parseBytes(bytes),now=Date.now();if(b){setText('live-total',humanBytes(b.rx));setText('live-total-sub','Upload '+humanBytes(b.tx));}else{setText('live-total','—');setText('live-total-sub','keine Zähler');}if(b&&lastBytes&&now>lastTime){var sec=(now-lastTime)/1000;setText('live-speed',speed((b.rx-lastBytes.rx)/sec));setText('live-speed-sub','Upload ↑ '+speed((b.tx-lastBytes.tx)/sec));}else{setText('live-speed',b?'wird berechnet':'—');setText('live-speed-sub',b?'Messung nach 5 Sekunden':'keine Zähler');}if(b){lastBytes=b;lastTime=now;}\
+var b=exactBytes(doc)||parseBytes(bytes),now=Date.now();if(b){setText('live-total',humanBytes(b.rx));setText('live-total-sub','Upload '+humanBytes(b.tx));}else{setText('live-total','—');setText('live-total-sub','keine Zähler');}if(b&&lastBytes&&now>lastTime){var sec=(now-lastTime)/1000;setText('live-speed',speed((b.rx-lastBytes.rx)/sec));setText('live-speed-sub','Upload ↑ '+speed((b.tx-lastBytes.tx)/sec));}else{setText('live-speed',b?'wird berechnet':'—');setText('live-speed-sub',b?'Messung nach 5 Sekunden':'keine Zähler');}if(b){lastBytes=b;lastTime=now;}\
 var warnings=[];if(!connected)warnings.push('Uplink ist getrennt.');if(rssi!==null&&rssi<-78)warnings.push('Das Uplink-Signal ist sehr schwach ('+rssi+' dBm).');if(doc.body.textContent.indexOf('No Password Protection')>=0)warnings.push('Die Weboberfläche ist nicht mit einem Passwort geschützt.');var box=document.getElementById('dashboard-warning');if(box){box.textContent=warnings.join(' ');box.className=warnings.length?'warning-box show':'warning-box';}\
 var live=document.getElementById('live-dot');if(live)live.className=connected?'live-dot':'live-dot offline';setText('last-update','Aktualisiert '+new Date().toLocaleTimeString());\
 }\
@@ -155,6 +156,7 @@ document.addEventListener('visibilitychange',function(){if(!document.hidden)wind
 <a href='/scan' class='nav-button'>WLAN-Scan</a>\
 <a href='/config' class='nav-button'>Konfiguration</a>\
 <a href='/mappings' class='nav-button'>Clients &amp; Freigaben</a>\
+<a href='/access' class='nav-button'>Zugriffsmodus</a>\
 <a href='/firewall' class='nav-button'>Firewall</a>\
 <a href='/vpn' class='nav-button'>VPN</a>\
 </div>"
@@ -163,6 +165,7 @@ document.addEventListener('visibilitychange',function(){if(!document.hidden)wind
 <div class='button-container'>\
 <a href='/config' class='nav-button'>Konfiguration</a>\
 <a href='/mappings' class='nav-button'>Clients &amp; Freigaben</a>\
+<a href='/access' class='nav-button'>Zugriffsmodus</a>\
 <a href='/firewall' class='nav-button'>Firewall</a>\
 <a href='/vpn' class='nav-button'>VPN</a>\
 </div>"

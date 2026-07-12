@@ -1,5 +1,23 @@
-# ESP32-S3 target overrides
+# ESP32-S3 N16R8 target overrides
 
-# Use built-in USB_SERIAL_JTAG for console output
+# 16 MB Quad flash (hardware verified on HW-678 N16R8)
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=n
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=n
+CONFIG_ESPTOOLPY_FLASHFREQ_40M=y
+CONFIG_ESPTOOLPY_FLASHFREQ="40m"
+
+# Larger OTA slots and storage for 16 MB devices
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_16mb.csv"
+
+# The router does not require external RAM. Keep PSRAM disabled for broad
+# N16R8 board compatibility; the full 8 MB remains available for a later,
+# board-specific performance profile.
+CONFIG_SPIRAM=n
+
+# Primary interactive console on native USB Serial/JTAG.
 CONFIG_ESP_CONSOLE_UART_DEFAULT=n
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=n

@@ -1036,11 +1036,11 @@ void wifi_init(const uint8_t* mac, const char* ssid, const char* ent_username, c
         }
     };
 
-    strlcpy((char*)ap_config.sta.ssid, ap_ssid, sizeof(ap_config.sta.ssid));
+    strlcpy((char*)ap_config.ap.ssid, ap_ssid, sizeof(ap_config.ap.ssid));
     if (strlen(ap_passwd) < 8) {
         ap_config.ap.authmode = WIFI_AUTH_OPEN;
     } else {
-	    strlcpy((char*)ap_config.sta.password, ap_passwd, sizeof(ap_config.sta.password));
+	    strlcpy((char*)ap_config.ap.password, ap_passwd, sizeof(ap_config.ap.password));
     }
 
     // Always use APSTA mode so WiFi scanning works even without an uplink configured
@@ -1295,6 +1295,22 @@ void app_main(void)
     if (client_stats_enabled) {
         ESP_LOGI(TAG, "Per-client stats enabled");
     }
+
+    // Load simple access-mode policy (defaults preserve existing behavior).
+    int access_setting = 1;
+    if (get_config_param_int("acc_inet", &access_setting) == ESP_OK) {
+        access_internet_enabled = (access_setting != 0);
+    }
+    access_setting = 1;
+    if (get_config_param_int("acc_clients", &access_setting) == ESP_OK) {
+        access_clients_enabled = (access_setting != 0);
+    }
+    access_setting = 1;
+    if (get_config_param_int("acc_private", &access_setting) == ESP_OK) {
+        access_private_enabled = (access_setting != 0);
+    }
+    ESP_LOGI(TAG, "Access mode: internet=%u clients=%u private=%u",
+             access_internet_enabled, access_clients_enabled, access_private_enabled);
 
     // Load TTL override setting from NVS (default 0 = disabled)
     int ttl_setting = 0;

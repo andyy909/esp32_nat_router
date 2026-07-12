@@ -20,13 +20,16 @@ C3-Unterstuetzung bleibt im Projekt enthalten, ist fuer dieses konkrete Geraet a
 - Signalstaerke in dBm, Prozent und Balkenanzeige
 - Warnung bei getrenntem Uplink oder sehr schwachem Signal
 - Warnung, wenn die Weboberflaeche kein Passwort besitzt
-- aktuelle Download- und Upload-Datenrate als Schaetzung aus den vorhandenen Zaehlern
+- aktuelle Download- und Upload-Datenrate aus exakten Byte-Zaehlern
 - gesamter Download- und Upload-Verbrauch
 - Laufzeit seit dem letzten Start
 - Uebersicht verbundener Geraete mit Name, IP, MAC und Datenverbrauch
 - direkte Verknuepfung zur Client-Verwaltung
 - technische Detailansicht bleibt einklappbar erhalten
 - Aktualisierung wird pausiert, waehrend der Browser-Tab nicht sichtbar ist
+- neuer Menuepunkt `Zugriffsmodus` mit drei unabhaengigen Schaltern fuer Internet, Kommunikation zwischen ESP32-Clients und Zugriff auf private Netze hinter dem Uplink
+- vier Schnellwahlen: nur Internet, nur Geraetenetz, Geraete und Internet sowie alles erlauben
+- Zugriffsregeln werden sofort angewendet und dauerhaft in NVS gespeichert
 
 ## Bewusst nicht in Version 1
 
@@ -79,5 +82,11 @@ Zusaetzlich geprueft:
 - `esptool image_info` fuer `firmware_esp32/esp32_nat_router.bin`: Checksum und Validation Hash gueltig
 - `esptool image_info` fuer `firmware_esp32/bootloader.bin`: Checksum und Validation Hash gueltig
 - statischer Live-Dashboard-Test aus `page_index.h`: JavaScript-Syntax ok, alle Live-IDs vorhanden, Status- und Client-Tabelle vorhanden
+- Browser-Test mit simulierten Router-Antworten fuer Desktop- und Mobilansicht
+- dynamische Geraetenamen und Fehlermeldungen auf der Client-Seite werden HTML-sicher ausgegeben
 
-Ein Hardwaretest auf dem echten ESP32-WROOM-32 steht weiterhin aus.
+Hardwaretests wurden auf klassischen ESP32-WROOM-32-Boards durchgefuehrt. Der
+zusaetzliche ESP32-S3-N16R8-Build wurde auf einem HW-678 Rev. 0.2 geflasht und
+mit aktivem AP, DHCP, NAT, Webserver und nativer USB-Konsole gestartet. Fuer
+diesen S3-Build bleibt PSRAM bewusst deaktiviert, da der Router es nicht
+benoetigt und das konkrete Board damit zuverlaessig startet.

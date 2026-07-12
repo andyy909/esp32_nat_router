@@ -52,6 +52,85 @@ static client_stats_entry_t client_stats[CLIENT_STATS_MAX];
 // Per-client stats enabled flag (default off; persisted in NVS "cstats_en")
 bool client_stats_enabled = false;
 
+// Access-mode defaults preserve the router's existing unrestricted behavior.
+volatile uint8_t access_internet_enabled = 1;
+volatile uint8_t access_clients_enabled = 1;
+volatile uint8_t access_private_enabled = 1;
+
+static IRAM_ATTR bool is_private_or_local_ipv4(uint32_t addr_net)
+{
+    uint32_t addr = lwip_ntohl(addr_net);
+
+    return (addr & 0xFF000000U) == 0x0A000000U ||       // 10.0.0.0/8
+           (addr & 0xFFF00000U) == 0xAC100000U ||       // 172.16.0.0/12
+           (addr & 0xFFFF0000U) == 0xC0A80000U ||       // 192.168.0.0/16
+           (addr & 0xFFC00000U) == 0x64400000U ||       // 100.64.0.0/10
+           (addr & 0xFFFF0000U) == 0xA9FE0000U ||       // 169.254.0.0/16
+           (addr & 0xFF000000U) == 0x7F000000U ||       // 127.0.0.0/8
+           (addr & 0xF0000000U) == 0xE0000000U ||       // multicast 224.0.0.0/4
+           (addr & 0xF0000000U) == 0xF0000000U;         // reserved 240.0.0.0/4
+}
+
+static IRAM_ATTR bool is_dns_packet(const struct ip_hdr *iphdr, const struct pbuf *p)
+{
+    uint8_t proto = IPH_PROTO(iphdr);
+    if (proto != PROTO_UDP && proto != PROTO_TCP) return false;
+
+    uint16_t ip_len = IPH_HL(iphdr) * 4;
+    if (ip_len < 20 || p->len < 14 + ip_len + 4) return false;
+
+    const uint8_t *transport = (const uint8_t *)iphdr + ip_len;
+    uint16_t dest_port = ((uint16_t)transport[2] << 8) | transport[3];
+    return dest_port == 53;
+}
+
+static IRAM_ATTR bool access_policy_denies(struct pbuf *p)
+{
+    if (p == NULL || p->len < 14) return false;
+
+    const uint8_t *frame = (const uint8_t *)p->payload;
+    uint16_t ether_type = ((uint16_t)frame[12] << 8) | frame[13];
+
+    if (ether_type == 0x0806 && !access_clients_enabled && p->len >= 42) {
+        uint32_t target;
+        memcpy(&target, frame + 38, sizeof(target));
+        uint32_t ap_mask = lwip_htonl(0xFFFFFF00U);
+        if ((target & ap_mask) == (my_ap_ip & ap_mask) && target != my_ap_ip) {
+            return true;
+        }
+        return false;
+    }
+
+    if (ether_type == 0x86DD) {
+        // Restrictive IPv4 modes must not be bypassed through IPv6.
+        return !access_internet_enabled || !access_clients_enabled || !access_private_enabled;
+    }
+
+    if (ether_type != 0x0800 || p->len < 14 + sizeof(struct ip_hdr)) return false;
+
+    const struct ip_hdr *iphdr = (const struct ip_hdr *)(frame + 14);
+    if (IPH_V(iphdr) != 4) return false;
+
+    uint32_t dest = iphdr->dest.addr;
+    uint32_t ap_mask = lwip_htonl(0xFFFFFF00U);
+    uint32_t ap_broadcast = (my_ap_ip & ap_mask) | ~ap_mask;
+
+    if (dest == my_ap_ip || dest == PP_HTONL(0xFFFFFFFFU) || dest == ap_broadcast) {
+        return false;
+    }
+
+    if ((dest & ap_mask) == (my_ap_ip & ap_mask)) {
+        return !access_clients_enabled;
+    }
+
+    if (is_private_or_local_ipv4(dest)) {
+        // A private upstream DNS server is required for normal name resolution.
+        return !access_private_enabled && !is_dns_packet(iphdr, p);
+    }
+
+    return !access_internet_enabled;
+}
+
 static IRAM_ATTR client_stats_entry_t* find_client_stats(const uint8_t *mac) {
     for (int i = 0; i < CLIENT_STATS_MAX; i++) {
         if (client_stats[i].active && memcmp(client_stats[i].mac, mac, 6) == 0) {
@@ -495,6 +574,11 @@ static void send_icmp_frag_needed(struct pbuf *p, struct netif *netif, uint16_t 
 // AP netif hook functions (for PCAP capture and ACL)
 static IRAM_ATTR err_t ap_netif_input_hook(struct pbuf *p, struct netif *netif) {
     bool is_acl_monitored = false;
+
+    if (access_policy_denies(p)) {
+        pbuf_free(p);
+        return ERR_OK;
+    }
 
     // Check to_ap ACL (packets from Clients to ESP32)
     if (!acl_is_empty(ACL_TO_AP)) {
