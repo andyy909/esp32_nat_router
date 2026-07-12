@@ -142,6 +142,11 @@ static uint64_t s_prev_rx;
 #if !CONFIG_WAVESHARE_C6_LCD_1_47
 static int64_t s_last_touch_log_us;
 static int64_t s_scan_navigation_unlock_us;
+static bool s_touch_active;
+static lv_point_t s_touch_last_point;
+static lv_point_t s_touch_candidate;
+static uint8_t s_touch_candidate_count;
+static int64_t s_touch_last_seen_us;
 #endif
 
 #if !CONFIG_WAVESHARE_C6_LCD_1_47
@@ -199,13 +204,52 @@ static void lvgl_touch_read(lv_indev_drv_t *drv, lv_indev_data_t *data)
     (void)drv;
     esp_lcd_touch_point_data_t point = { 0 };
     uint8_t count = 0;
+    int64_t now = esp_timer_get_time();
+    bool has_point = esp_lcd_touch_read_data(s_touch) == ESP_OK &&
+                     esp_lcd_touch_get_data(s_touch, &point, &count, 1) == ESP_OK &&
+                     count > 0;
 
-    if (esp_lcd_touch_read_data(s_touch) == ESP_OK &&
-        esp_lcd_touch_get_data(s_touch, &point, &count, 1) == ESP_OK && count > 0) {
+    if (has_point) {
+        lv_point_t sample = { .x = point.x, .y = point.y };
+        if (s_touch_active) {
+            int dx = abs(sample.x - s_touch_last_point.x);
+            int dy = abs(sample.y - s_touch_last_point.y);
+            if (dx <= 80 && dy <= 80) {
+                s_touch_last_point = sample;
+                s_touch_last_seen_us = now;
+            }
+            data->state = LV_INDEV_STATE_PR;
+            data->point = s_touch_last_point;
+            return;
+        }
+
+        int dx = abs(sample.x - s_touch_candidate.x);
+        int dy = abs(sample.y - s_touch_candidate.y);
+        if (s_touch_candidate_count > 0 && dx <= 25 && dy <= 25) {
+            s_touch_candidate_count++;
+        } else {
+            s_touch_candidate = sample;
+            s_touch_candidate_count = 1;
+        }
+        if (s_touch_candidate_count >= 2) {
+            s_touch_active = true;
+            s_touch_last_point = sample;
+            s_touch_last_seen_us = now;
+            s_touch_candidate_count = 0;
+            data->state = LV_INDEV_STATE_PR;
+            data->point = s_touch_last_point;
+        } else {
+            data->state = LV_INDEV_STATE_REL;
+        }
+        return;
+    }
+
+    s_touch_candidate_count = 0;
+    if (s_touch_active && now - s_touch_last_seen_us < 100000) {
         data->state = LV_INDEV_STATE_PR;
-        data->point.x = point.x;
-        data->point.y = point.y;
+        data->point = s_touch_last_point;
     } else {
+        s_touch_active = false;
         data->state = LV_INDEV_STATE_REL;
     }
 }
@@ -341,7 +385,7 @@ static void devices_update(lv_timer_t *timer)
         lv_obj_t *name_label = make_label(row, name, 7, 1, LV_FONT_DEFAULT,
                                           lv_color_hex(0xEAF4F8));
         lv_label_set_long_mode(name_label, LV_LABEL_LONG_DOT);
-        lv_obj_set_width(name_label, 132);
+        lv_obj_set_size(name_label, 132, lv_font_get_line_height(LV_FONT_DEFAULT));
 
         char ip[16] = "keine IP";
         if (clients[i].has_ip) {
