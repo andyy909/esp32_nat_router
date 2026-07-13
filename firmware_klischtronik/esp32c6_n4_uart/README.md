@@ -23,7 +23,7 @@ that preserves the partition layout can write only `esp32_nat_router.bin` at
 ## Verified Status
 
 - ESP-IDF 5.4.1, target `esp32c6`
-- Application size: `0x17cae0` of `0x180000`; free space: `0x3520` (1%)
+- Application size: `0x17c6c0` of `0x180000`; free space: `0x3940` (1%)
 - Flash hash verified with esptool
 - CH343 console, router application, and access point tested on hardware
 - Tested board: ESP32-DevKit-C6 V1.3, ESPC6-32 N4, revision 0.2

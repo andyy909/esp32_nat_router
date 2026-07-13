@@ -68,11 +68,11 @@ idf.py -B build_waveshare_c6_lcd_1_47 \
 
 ## Validation Status
 
-- Classic ESP32-WROOM-32: application `0x15d270` of `0x180000`, 9% free
-- ESP32-S3 N16R8: application `0x165090` of `0x300000`, 54% free
-- CYD2USB: application `0x19c1e0` of `0x1e0000`, 14% free
-- ESP32-C6 N4 UART: application `0x17cae0` of `0x180000`, 1% free
-- Waveshare ESP32-C6-LCD-1.47: application `0x1b7fa0` of `0x300000`, 43% free
+- Classic ESP32-WROOM-32: application `0x15ce50` of `0x180000`, 9% free
+- ESP32-S3 N16R8: application `0x15f7c0` of `0x300000`, 54% free
+- CYD2USB: application `0x19bd90` of `0x1e0000`, 14% free
+- ESP32-C6 N4 UART: application `0x17c6c0` of `0x180000`, 1% free
+- Waveshare ESP32-C6-LCD-1.47: application `0x1b7b60` of `0x300000`, 43% free
 - Firmware hashes and partition-size checks passed for the packaged builds
 - CYD startup, touch, repeated Wi-Fi scans, network selection, keyboard, client
   list, AP, DHCP, NAT, and web server were tested on hardware

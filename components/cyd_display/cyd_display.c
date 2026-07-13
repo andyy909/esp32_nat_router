@@ -306,7 +306,7 @@ static void nav_event(lv_event_t *event)
     uint8_t page = (uint8_t)(intptr_t)lv_event_get_user_data(event);
     if (page != 2 && (s_scan_navigation_locked ||
                       esp_timer_get_time() < s_scan_navigation_unlock_us)) {
-        ESP_LOGD(TAG, "Ignoring navigation while WLAN scan UI is settling");
+        ESP_LOGD(TAG, "Ignoring navigation while Wi-Fi scan UI is settling");
         return;
     }
     show_page(page);
@@ -317,7 +317,7 @@ static void add_nav(lv_obj_t *page, uint8_t active_page)
     static const char *labels[] = {
         LV_SYMBOL_HOME " Status",
         LV_SYMBOL_SETTINGS " Modus",
-        LV_SYMBOL_WIFI " WLAN",
+        LV_SYMBOL_WIFI " Wi-Fi",
         LV_SYMBOL_LIST " Clients",
     };
     for (uint8_t i = 0; i < 4; i++) {
@@ -358,12 +358,12 @@ static void devices_update(lv_timer_t *timer)
     connected_client_t clients[AP_MAX_CONNECTIONS];
     int count = get_connected_clients(clients, AP_MAX_CONNECTIONS);
     char text[64];
-    snprintf(text, sizeof(text), "%d verbunden", count);
+    snprintf(text, sizeof(text), "%d connected", count);
     lv_label_set_text(s_devices_summary, text);
     lv_obj_clean(s_devices_list);
 
     if (count == 0) {
-        lv_obj_t *empty = make_label(s_devices_list, "Keine Geraete verbunden", 0, 58,
+        lv_obj_t *empty = make_label(s_devices_list, "No devices connected", 0, 58,
                                      &lv_font_montserrat_16, lv_color_hex(0x8295A5));
         lv_obj_set_width(empty, 296);
         lv_obj_set_style_text_align(empty, LV_TEXT_ALIGN_CENTER, 0);
@@ -381,13 +381,13 @@ static void devices_update(lv_timer_t *timer)
         lv_obj_set_style_pad_all(row, 0, 0);
         lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
-        const char *name = clients[i].name[0] ? clients[i].name : "Unbekanntes Geraet";
+        const char *name = clients[i].name[0] ? clients[i].name : "Unknown device";
         lv_obj_t *name_label = make_label(row, name, 7, 1, LV_FONT_DEFAULT,
                                           lv_color_hex(0xEAF4F8));
         lv_label_set_long_mode(name_label, LV_LABEL_LONG_DOT);
         lv_obj_set_size(name_label, 132, lv_font_get_line_height(LV_FONT_DEFAULT));
 
-        char ip[16] = "keine IP";
+        char ip[16] = "no IP";
         if (clients[i].has_ip) {
             esp_ip4_addr_t addr = { .addr = clients[i].ip };
             snprintf(ip, sizeof(ip), IPSTR, IP2STR(&addr));
@@ -418,7 +418,7 @@ static void status_update(lv_timer_t *timer)
     } else if (ssid && ssid[0]) {
         snprintf(text, sizeof(text), "%.*s", 28, ssid);
     } else {
-        snprintf(text, sizeof(text), "Kein Bezugsnetz");
+        snprintf(text, sizeof(text), "No uplink network");
     }
     lv_label_set_text(s_uplink_detail, text);
 
@@ -538,7 +538,7 @@ static void wifi_keyboard_event(lv_event_t *event)
 
     const char *password = lv_textarea_get_text(s_wifi_password);
     if (s_selected_authmode != WIFI_AUTH_OPEN && strlen(password) < 8) {
-        lv_label_set_text(s_wifi_selected_label, "Passwort muss mindestens 8 Zeichen haben");
+        lv_label_set_text(s_wifi_selected_label, "Password must be at least 8 characters");
         return;
     }
 
@@ -547,16 +547,16 @@ static void wifi_keyboard_event(lv_event_t *event)
     if (err == ESP_OK) err = set_config_param_str("ent_username", "");
     if (err == ESP_OK) err = set_config_param_str("ent_identity", "");
     if (err != ESP_OK) {
-        lv_label_set_text(s_wifi_selected_label, "Speichern fehlgeschlagen");
-        ESP_LOGE(TAG, "Touch WLAN save failed: %s", esp_err_to_name(err));
+        lv_label_set_text(s_wifi_selected_label, "Save failed");
+        ESP_LOGE(TAG, "Touch Wi-Fi save failed: %s", esp_err_to_name(err));
         return;
     }
 
-    ESP_LOGI(TAG, "Touch WLAN selected: %s", s_selected_ssid);
+    ESP_LOGI(TAG, "Touch Wi-Fi selected: %s", s_selected_ssid);
     lv_keyboard_set_textarea(s_wifi_keyboard, NULL);
     lv_obj_add_flag(s_wifi_keyboard, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_wifi_password, LV_OBJ_FLAG_HIDDEN);
-    lv_label_set_text(s_wifi_selected_label, "Gespeichert. Router startet neu...");
+    lv_label_set_text(s_wifi_selected_label, "Saved. Router is restarting...");
     lv_timer_t *timer = lv_timer_create(wifi_restart_timer, 1200, NULL);
     lv_timer_set_repeat_count(timer, 1);
 }
@@ -566,7 +566,7 @@ static void wifi_network_event(lv_event_t *event)
     uint8_t index = (uint8_t)(intptr_t)lv_event_get_user_data(event);
     if (index >= s_wifi_entry_count) return;
     if (s_wifi_entries[index].authmode == WIFI_AUTH_WPA2_ENTERPRISE) {
-        lv_label_set_text(s_wifi_scan_status, "Enterprise-WLAN bitte in der WebUI einrichten");
+        lv_label_set_text(s_wifi_scan_status, "Configure enterprise Wi-Fi in the Web UI");
         return;
     }
 
@@ -574,7 +574,7 @@ static void wifi_network_event(lv_event_t *event)
     s_selected_authmode = s_wifi_entries[index].authmode;
     char title[64];
     snprintf(title, sizeof(title), "%s: %s",
-             s_selected_authmode == WIFI_AUTH_OPEN ? "Offenes WLAN" : "Passwort",
+             s_selected_authmode == WIFI_AUTH_OPEN ? "Open Wi-Fi" : "Password",
              s_selected_ssid);
     lv_label_set_text(s_wifi_selected_label, title);
     lv_textarea_set_text(s_wifi_password, "");
@@ -591,12 +591,12 @@ static void wifi_render_results(void)
     show_page(2);
     lv_obj_clean(s_wifi_result_list);
     if (s_scan_failed) {
-        lv_label_set_text(s_wifi_scan_status, "Scan fehlgeschlagen - erneut versuchen");
+        lv_label_set_text(s_wifi_scan_status, "Scan failed - try again");
     } else if (s_wifi_entry_count == 0) {
-        lv_label_set_text(s_wifi_scan_status, "Keine WLAN-Netze gefunden");
+        lv_label_set_text(s_wifi_scan_status, "No Wi-Fi networks found");
     } else {
         char status[48];
-        snprintf(status, sizeof(status), "%u Netze gefunden", (unsigned)s_wifi_entry_count);
+        snprintf(status, sizeof(status), "%u networks found", (unsigned)s_wifi_entry_count);
         lv_label_set_text(s_wifi_scan_status, status);
         for (uint8_t i = 0; i < s_wifi_entry_count; i++) {
             lv_obj_t *button = lv_btn_create(s_wifi_result_list);
@@ -610,7 +610,7 @@ static void wifi_render_results(void)
             char row[64];
             snprintf(row, sizeof(row), "%-24.24s %4d dBm %s",
                      s_wifi_entries[i].ssid, s_wifi_entries[i].rssi,
-                     s_wifi_entries[i].authmode == WIFI_AUTH_OPEN ? "OFFEN" : "");
+                     s_wifi_entries[i].authmode == WIFI_AUTH_OPEN ? "OPEN" : "");
             lv_obj_t *label = lv_label_create(button);
             lv_label_set_text(label, row);
             lv_obj_set_style_text_font(label, LV_FONT_DEFAULT, 0);
@@ -638,7 +638,7 @@ static void wifi_scan_event(lv_event_t *event)
     s_scan_navigation_locked = true;
     s_scan_requested = true;
     show_page(2);
-    lv_label_set_text(s_wifi_scan_status, "Scanne...");
+    lv_label_set_text(s_wifi_scan_status, "Scanning...");
 }
 #endif
 
@@ -703,7 +703,7 @@ static void wifi_scan_task(void *arg)
         }
         s_scan_requested = false;
         s_scan_ready = true;
-        ESP_LOGI(TAG, "WLAN scan: %u results (%s)",
+        ESP_LOGI(TAG, "Wi-Fi scan: %u results (%s)",
                  (unsigned)s_wifi_entry_count, esp_err_to_name(err));
     }
 }
@@ -723,7 +723,7 @@ static void c6_show_page(uint8_t page)
         s_scan_ready = false;
         s_scan_failed = false;
         s_scan_requested = true;
-        lv_label_set_text(s_wifi_scan_status, "Suche WLAN-Netze ...");
+        lv_label_set_text(s_wifi_scan_status, "Searching for Wi-Fi...");
     }
 }
 
@@ -756,12 +756,12 @@ static void c6_devices_update(lv_timer_t *timer)
     connected_client_t clients[AP_MAX_CONNECTIONS];
     int count = get_connected_clients(clients, AP_MAX_CONNECTIONS);
     char text[48];
-    snprintf(text, sizeof(text), "%d verbunden", count);
+    snprintf(text, sizeof(text), "%d connected", count);
     lv_label_set_text(s_devices_summary, text);
     lv_obj_clean(s_devices_list);
 
     if (count == 0) {
-        lv_obj_t *empty = make_label(s_devices_list, "Keine Clients", 0, 72,
+        lv_obj_t *empty = make_label(s_devices_list, "No clients", 0, 72,
                                      &lv_font_montserrat_16, lv_color_hex(0x8295A5));
         lv_obj_set_width(empty, 140);
         lv_obj_set_style_text_align(empty, LV_TEXT_ALIGN_CENTER, 0);
@@ -779,13 +779,13 @@ static void c6_devices_update(lv_timer_t *timer)
         lv_obj_set_style_pad_all(row, 0, 0);
         lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
-        const char *name = clients[i].name[0] ? clients[i].name : "Unbekannt";
+        const char *name = clients[i].name[0] ? clients[i].name : "Unknown";
         lv_obj_t *name_label = make_label(row, name, 6, 3, LV_FONT_DEFAULT,
                                           lv_color_hex(0xEAF4F8));
         lv_label_set_long_mode(name_label, LV_LABEL_LONG_DOT);
         lv_obj_set_width(name_label, 128);
 
-        char ip[16] = "keine IP";
+        char ip[16] = "no IP";
         if (clients[i].has_ip) {
             esp_ip4_addr_t addr = { .addr = clients[i].ip };
             snprintf(ip, sizeof(ip), IPSTR, IP2STR(&addr));
@@ -801,19 +801,19 @@ static void c6_scan_update(lv_timer_t *timer)
 
     if (s_scan_failed) {
         s_scan_failed = false;
-        lv_label_set_text(s_wifi_scan_status, "Scan fehlgeschlagen");
+        lv_label_set_text(s_wifi_scan_status, "Scan failed");
         return;
     }
     if (!s_scan_ready) return;
     s_scan_ready = false;
 
     char text[48];
-    snprintf(text, sizeof(text), "%u Netze gefunden", (unsigned)s_wifi_entry_count);
+    snprintf(text, sizeof(text), "%u networks found", (unsigned)s_wifi_entry_count);
     lv_label_set_text(s_wifi_scan_status, text);
     lv_obj_clean(s_wifi_result_list);
 
     if (s_wifi_entry_count == 0) {
-        make_label(s_wifi_result_list, "Keine Netze", 0, 72,
+        make_label(s_wifi_result_list, "No networks", 0, 72,
                    &lv_font_montserrat_16, lv_color_hex(0x8295A5));
         return;
     }
@@ -834,7 +834,7 @@ static void c6_scan_update(lv_timer_t *timer)
         lv_obj_set_width(ssid_label, 96);
         snprintf(text, sizeof(text), "%d", s_wifi_entries[i].rssi);
         make_label(row, text, 108, 2, LV_FONT_DEFAULT, lv_color_hex(0x52D8E8));
-        make_label(row, s_wifi_entries[i].authmode == WIFI_AUTH_OPEN ? "offen" : "geschuetzt",
+        make_label(row, s_wifi_entries[i].authmode == WIFI_AUTH_OPEN ? "open" : "secured",
                    6, 18, LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
     }
 }
@@ -865,7 +865,7 @@ static void create_ui(void)
     make_label(uplink, "INTERNET", 0, 0, LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
     s_uplink_value = make_label(uplink, "OFFLINE", 0, 18, &lv_font_montserrat_20,
                                 lv_color_hex(0xFF6B6B));
-    s_uplink_detail = make_label(uplink, "Kein Bezugsnetz", 0, 43, LV_FONT_DEFAULT,
+    s_uplink_detail = make_label(uplink, "No uplink network", 0, 43, LV_FONT_DEFAULT,
                                  lv_color_hex(0xAFC0CC));
     lv_label_set_long_mode(s_uplink_detail, LV_LABEL_LONG_DOT);
     lv_obj_set_width(s_uplink_detail, 140);
@@ -889,7 +889,7 @@ static void create_ui(void)
 
     make_label(s_status_page, "WebUI: 192.168.4.1", 10, 284, LV_FONT_DEFAULT,
                lv_color_hex(0x8295A5));
-    make_label(s_status_page, "BOOT: naechste Seite", 10, 302, LV_FONT_DEFAULT,
+    make_label(s_status_page, "BOOT: next page", 10, 302, LV_FONT_DEFAULT,
                lv_color_hex(0x526473));
 
     s_devices_page = lv_obj_create(screen);
@@ -898,9 +898,9 @@ static void create_ui(void)
     lv_obj_set_style_border_width(s_devices_page, 0, 0);
     lv_obj_set_style_pad_all(s_devices_page, 0, 0);
     lv_obj_clear_flag(s_devices_page, LV_OBJ_FLAG_SCROLLABLE);
-    make_label(s_devices_page, "GERAETE", 10, 7, &lv_font_montserrat_20,
+    make_label(s_devices_page, "DEVICES", 10, 7, &lv_font_montserrat_20,
                lv_color_hex(0x52D8E8));
-    s_devices_summary = make_label(s_devices_page, "0 verbunden", 10, 31,
+    s_devices_summary = make_label(s_devices_page, "0 connected", 10, 31,
                                    LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
     s_devices_list = lv_obj_create(s_devices_page);
     lv_obj_set_pos(s_devices_list, 8, 52);
@@ -910,7 +910,7 @@ static void create_ui(void)
     lv_obj_set_style_pad_all(s_devices_list, 0, 0);
     lv_obj_set_scroll_dir(s_devices_list, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(s_devices_list, LV_SCROLLBAR_MODE_AUTO);
-    make_label(s_devices_page, "BOOT: naechste Seite", 10, 298, LV_FONT_DEFAULT,
+    make_label(s_devices_page, "BOOT: next page", 10, 298, LV_FONT_DEFAULT,
                lv_color_hex(0x526473));
 
     s_wifi_page = lv_obj_create(screen);
@@ -919,9 +919,9 @@ static void create_ui(void)
     lv_obj_set_style_border_width(s_wifi_page, 0, 0);
     lv_obj_set_style_pad_all(s_wifi_page, 0, 0);
     lv_obj_clear_flag(s_wifi_page, LV_OBJ_FLAG_SCROLLABLE);
-    make_label(s_wifi_page, "WLAN SCAN", 10, 7, &lv_font_montserrat_20,
+    make_label(s_wifi_page, "WI-FI SCAN", 10, 7, &lv_font_montserrat_20,
                lv_color_hex(0x52D8E8));
-    s_wifi_scan_status = make_label(s_wifi_page, "Scan startet ...", 10, 31,
+    s_wifi_scan_status = make_label(s_wifi_page, "Starting scan...", 10, 31,
                                     LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
     s_wifi_result_list = lv_obj_create(s_wifi_page);
     lv_obj_set_pos(s_wifi_result_list, 8, 52);
@@ -931,7 +931,7 @@ static void create_ui(void)
     lv_obj_set_style_pad_all(s_wifi_result_list, 0, 0);
     lv_obj_set_scroll_dir(s_wifi_result_list, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(s_wifi_result_list, LV_SCROLLBAR_MODE_AUTO);
-    make_label(s_wifi_page, "BOOT: naechste Seite", 10, 298, LV_FONT_DEFAULT,
+    make_label(s_wifi_page, "BOOT: next page", 10, 298, LV_FONT_DEFAULT,
                lv_color_hex(0x526473));
 
     gpio_config_t button = {
@@ -999,19 +999,19 @@ static void create_ui(void)
     lv_obj_set_style_border_width(s_access_page, 0, 0);
     lv_obj_set_style_pad_all(s_access_page, 0, 0);
     lv_obj_clear_flag(s_access_page, LV_OBJ_FLAG_SCROLLABLE);
-    make_label(s_access_page, "ZUGRIFFSMODUS", 10, 7, &lv_font_montserrat_20, lv_color_hex(0x52D8E8));
-    make_label(s_access_page, "Aenderungen gelten sofort", 10, 30, LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
+    make_label(s_access_page, "ACCESS MODE", 10, 7, &lv_font_montserrat_20, lv_color_hex(0x52D8E8));
+    make_label(s_access_page, "Changes apply immediately", 10, 30, LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
 
     preset_button(s_access_page, "Internet", 8, 49, 1);
-    preset_button(s_access_page, "Geraete", 86, 49, 2);
-    preset_button(s_access_page, "Beides", 164, 49, 3);
-    preset_button(s_access_page, "Alles", 242, 49, 7);
+    preset_button(s_access_page, "Clients", 86, 49, 2);
+    preset_button(s_access_page, "Both", 164, 49, 3);
+    preset_button(s_access_page, "All", 242, 49, 7);
 
-    s_switch_internet = access_row(s_access_page, "Internet teilen", "Oeffentliche Ziele", 88,
+    s_switch_internet = access_row(s_access_page, "Share Internet", "Public destinations", 88,
                                     access_internet_enabled);
-    s_switch_clients = access_row(s_access_page, "Geraete verbinden", "Clients untereinander", 128,
+    s_switch_clients = access_row(s_access_page, "Connect clients", "Client-to-client traffic", 128,
                                    access_clients_enabled);
-    s_switch_private = access_row(s_access_page, "Bezugsnetz", "Private Uplink-Netze", 168,
+    s_switch_private = access_row(s_access_page, "Uplink networks", "Private uplink networks", 168,
                                    access_private_enabled);
     add_nav(s_access_page, 1);
 
@@ -1021,9 +1021,9 @@ static void create_ui(void)
     lv_obj_set_style_border_width(s_devices_page, 0, 0);
     lv_obj_set_style_pad_all(s_devices_page, 0, 0);
     lv_obj_clear_flag(s_devices_page, LV_OBJ_FLAG_SCROLLABLE);
-    make_label(s_devices_page, "VERBUNDENE GERAETE", 10, 7, &lv_font_montserrat_20,
+    make_label(s_devices_page, "CONNECTED DEVICES", 10, 7, &lv_font_montserrat_20,
                lv_color_hex(0x52D8E8));
-    s_devices_summary = make_label(s_devices_page, "0 verbunden", 10, 29,
+    s_devices_summary = make_label(s_devices_page, "0 connected", 10, 29,
                                    LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
     s_devices_list = lv_obj_create(s_devices_page);
     lv_obj_set_pos(s_devices_list, 8, 43);
@@ -1048,7 +1048,7 @@ static void create_ui(void)
     lv_obj_set_style_border_width(s_wifi_scan_panel, 0, 0);
     lv_obj_set_style_pad_all(s_wifi_scan_panel, 0, 0);
     lv_obj_clear_flag(s_wifi_scan_panel, LV_OBJ_FLAG_SCROLLABLE);
-    make_label(s_wifi_scan_panel, "BEZUGS-WLAN", 10, 7, &lv_font_montserrat_20,
+    make_label(s_wifi_scan_panel, "UPLINK WI-FI", 10, 7, &lv_font_montserrat_20,
                lv_color_hex(0x52D8E8));
     lv_obj_t *scan_button = lv_btn_create(s_wifi_scan_panel);
     lv_obj_set_pos(scan_button, 229, 5);
@@ -1059,7 +1059,7 @@ static void create_ui(void)
     lv_obj_t *scan_label = lv_label_create(scan_button);
     lv_label_set_text(scan_label, LV_SYMBOL_REFRESH " Scan");
     lv_obj_center(scan_label);
-    s_wifi_scan_status = make_label(s_wifi_scan_panel, "Scan antippen", 10, 39,
+    s_wifi_scan_status = make_label(s_wifi_scan_panel, "Tap Scan", 10, 39,
                                     LV_FONT_DEFAULT, lv_color_hex(0x8295A5));
     s_wifi_result_list = lv_obj_create(s_wifi_scan_panel);
     lv_obj_set_pos(s_wifi_result_list, 8, 55);
@@ -1075,7 +1075,7 @@ static void create_ui(void)
     lv_obj_set_style_border_width(s_wifi_password_panel, 0, 0);
     lv_obj_set_style_pad_all(s_wifi_password_panel, 0, 0);
     lv_obj_clear_flag(s_wifi_password_panel, LV_OBJ_FLAG_SCROLLABLE);
-    s_wifi_selected_label = make_label(s_wifi_password_panel, "WLAN-Passwort", 9, 2,
+    s_wifi_selected_label = make_label(s_wifi_password_panel, "Wi-Fi Password", 9, 2,
                                        LV_FONT_DEFAULT, lv_color_hex(0x52D8E8));
     lv_label_set_long_mode(s_wifi_selected_label, LV_LABEL_LONG_DOT);
     lv_obj_set_width(s_wifi_selected_label, 220);
@@ -1086,7 +1086,7 @@ static void create_ui(void)
     lv_obj_set_style_bg_color(back_button, lv_color_hex(0x223241), 0);
     lv_obj_add_event_cb(back_button, wifi_back_event, LV_EVENT_CLICKED, NULL);
     lv_obj_t *back_label = lv_label_create(back_button);
-    lv_label_set_text(back_label, LV_SYMBOL_LEFT " Zurueck");
+    lv_label_set_text(back_label, LV_SYMBOL_LEFT " Back");
     lv_obj_set_style_text_font(back_label, LV_FONT_DEFAULT, 0);
     lv_obj_center(back_label);
     s_wifi_password = lv_textarea_create(s_wifi_password_panel);
@@ -1094,7 +1094,7 @@ static void create_ui(void)
     lv_obj_set_size(s_wifi_password, 304, 32);
     lv_textarea_set_one_line(s_wifi_password, true);
     lv_textarea_set_password_mode(s_wifi_password, true);
-    lv_textarea_set_placeholder_text(s_wifi_password, "Passwort");
+    lv_textarea_set_placeholder_text(s_wifi_password, "Password");
     s_wifi_keyboard = lv_keyboard_create(s_wifi_password_panel);
     lv_obj_set_size(s_wifi_keyboard, 304, 173);
     lv_obj_align(s_wifi_keyboard, LV_ALIGN_TOP_LEFT, 8, 57);
@@ -1324,7 +1324,7 @@ void cyd_display_init(void)
     result = xTaskCreatePinnedToCore(wifi_scan_task, "cyd_scan", 4096, NULL, 2, NULL, 0);
 #endif
     if (result != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create WLAN scan task");
+        ESP_LOGE(TAG, "Failed to create Wi-Fi scan task");
     }
 }
 

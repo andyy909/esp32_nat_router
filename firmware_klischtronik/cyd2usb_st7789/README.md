@@ -39,7 +39,7 @@ starts at `0x20000`, and its partition table is incompatible with this profile.
 ## Verified Status
 
 - ESP-IDF 5.4.1, target `esp32`
-- Application size: `0x19c1e0`; free OTA slot space: `0x43e20` (14%)
+- Application size: `0x19bd90`; free OTA slot space: `0x44270` (14%)
 - Flash hash verified with esptool
 - Startup, ST7789 mode 3, XPT2046 touch, uplink, AP, DHCP, NAT, and web server tested
 - Wi-Fi scanning, results, network selection, and on-screen keyboard tested on hardware

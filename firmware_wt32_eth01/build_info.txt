@@ -1,7 +1,10 @@
 ESP32 NAT Router Build Information
 =================================
-Target: WT32-ETH01 (Ethernet) (wt32_eth01)
-Build Time: 2026-06-19 20:26:10
-Git Hash: 0ee4ba5
-Binary Files: 4
-Build Directory: build_eth
+Target: WT32-ETH01 Ethernet uplink (wt32_eth01)
+Build Date: 2026-07-13
+Base Git Hash: 2ef937f
+Changes: English user interface
+ESP-IDF: v5.4.1
+App Binary Size: 0x146e80 bytes
+Smallest App Partition: 0x180000 bytes
+Free App Partition Space: 0x39180 bytes (14%)

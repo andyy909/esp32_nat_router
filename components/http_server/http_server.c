@@ -1574,9 +1574,9 @@ static esp_err_t access_get_handler(httpd_req_t *req)
     httpd_resp_set_type(req, "text/html; charset=UTF-8");
     SEND_CHUNK(req, ACCESS_PAGE_HEAD, HTTPD_RESP_USE_STRLEN);
     if (saved) {
-        SEND_CHUNK(req, "<div class='saved'>Zugriffsmodus gespeichert.</div>", HTTPD_RESP_USE_STRLEN);
+        SEND_CHUNK(req, "<div class='saved'>Access mode saved.</div>", HTTPD_RESP_USE_STRLEN);
     } else if (save_error) {
-        SEND_CHUNK(req, "<div class='saved' style='background:#3a2020;color:#ffb4b4;border-color:#713737'>Speichern fehlgeschlagen.</div>", HTTPD_RESP_USE_STRLEN);
+        SEND_CHUNK(req, "<div class='saved' style='background:#3a2020;color:#ffb4b4;border-color:#713737'>Save failed.</div>", HTTPD_RESP_USE_STRLEN);
     }
     char form[4096];
     snprintf(form, sizeof(form), ACCESS_PAGE_FORM,

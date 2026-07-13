@@ -1,7 +1,10 @@
 ESP32 NAT Router Build Information
 =================================
 Target: ESP32-C6 (esp32c6)
-Build Time: 2026-06-19 20:34:27
-Git Hash: 0ee4ba5
-Binary Files: 4
-Build Directory: build
+Build Date: 2026-07-13
+Base Git Hash: 2ef937f
+Changes: English user interface
+ESP-IDF: v5.4.1
+App Binary Size: 0x178070 bytes
+Smallest App Partition: 0x180000 bytes
+Free App Partition Space: 0x7f90 bytes (2%)
